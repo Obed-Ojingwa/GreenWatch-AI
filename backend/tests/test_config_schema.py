@@ -6,6 +6,11 @@ from app.db.models import Base
 from app.db.session import normalize_database_url
 
 SCHEMA = (Path(__file__).resolve().parents[1] / "app" / "db" / "schema.sql").read_text()
+MIGRATION = (
+    Path(__file__).resolve().parents[2]
+    / "supabase_migrations"
+    / "20261030164200_initial_schema.sql"
+).read_text()
 
 
 def _sql_columns() -> dict[str, set[str]]:
@@ -32,6 +37,12 @@ def test_schema_sql_matches_sqlalchemy_models():
 def test_schema_enables_rls_on_every_table():
     for table in _sql_columns():
         assert f"alter table {table} enable row level security;" in SCHEMA
+
+
+def test_supabase_initial_migration_matches_canonical_schema():
+    sql_migration = "\n".join(line for line in MIGRATION.splitlines() if not line.startswith("--"))
+    sql_schema = "\n".join(line for line in SCHEMA.splitlines() if not line.startswith("--"))
+    assert sql_migration.strip() == sql_schema.strip()
 
 
 def test_default_agent_call_budget_covers_three_categories_with_one_retry():

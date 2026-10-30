@@ -34,11 +34,11 @@ services:
       - key: META_BASE_URL
         sync: false
       - key: META_AUTH_HEADER
-        value: Authorization
+        sync: false
       - key: META_AUTH_SCHEME
-        value: Bearer
+        sync: false
       - key: META_CHAT_PATH
-        value: chat/completions
+        sync: false
       - key: META_SEGMENT_PATH
         sync: false
       - key: META_SEGMENT_BODY
@@ -53,5 +53,9 @@ services:
         sync: false
       - key: MAX_UPLOAD_MB
         value: "15"
+      - key: MAX_TOOL_CALLS_PER_RUN
+        value: "40"
+      - key: MAX_QC_RETRIES
+        value: "1"
       - key: MAX_AGENT_RUNS_PER_HOUR
         value: "20"

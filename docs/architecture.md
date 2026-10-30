@@ -52,6 +52,8 @@ A modular monolith. Analyses run as FastAPI background tasks; the frontend polls
 
 `investigations`, `images`, `analysis_runs` (validation, metrics, findings, interpretation, status), `segmentation_results` (per image, category, prompt, attempt, QC status, mask and overlay paths), `agent_steps` (powers the timeline), `reports`, `inspection_tasks`. Schema: `backend/app/db/schema.sql` (a test checks it against the SQLAlchemy models).
 
+For a new Supabase project, apply `supabase_migrations/20261030164200_initial_schema.sql` once. It is tested against the canonical schema; do not rerun it over an existing installation.
+
 ## API
 
 | Method | Path | Access |
