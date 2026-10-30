@@ -34,6 +34,14 @@ def test_schema_enables_rls_on_every_table():
         assert f"alter table {table} enable row level security;" in SCHEMA
 
 
+def test_default_agent_call_budget_covers_three_categories_with_one_retry():
+    settings = Settings(_env_file=None)
+    full_run_calls = 2 + 3 * 7 + 1 + 1 + (3 * 2 * 2)
+    assert settings.max_tool_calls_per_run == 40
+    assert settings.max_qc_retries == 1
+    assert full_run_calls <= settings.max_tool_calls_per_run
+
+
 def test_database_url_is_normalised_for_psycopg3():
     assert normalize_database_url("postgres://u:p@h:5432/db") == "postgresql+psycopg://u:p@h:5432/db"
     assert normalize_database_url("postgresql://u:p@h/db") == "postgresql+psycopg://u:p@h/db"

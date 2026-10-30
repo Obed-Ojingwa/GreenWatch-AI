@@ -79,7 +79,7 @@ def test_vision_rejection_exhausts_retries_and_flags(db, storage):
     meta = FakeMeta(vision=lambda p: (False, ["mask looks wrong"], None))
     _, run = _go(db, storage, meta)
     segs = db.query(SegmentationResult).filter_by(run_id=run.id, role="earlier").order_by(SegmentationResult.attempt).all()
-    assert [s.qc_status for s in segs] == ["retry", "retry", "flagged"]  # initial + 2 retries
+    assert [s.qc_status for s in segs] == ["retry", "flagged"]  # initial + 1 retry
     assert run.status == "review_required"
     rep = db.query(Report).filter_by(run_id=run.id).one()
     assert rep.kind == "needs_review"

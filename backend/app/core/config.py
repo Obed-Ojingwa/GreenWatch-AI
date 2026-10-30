@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     max_image_dim: int = 2048  # analysis grid: images are downscaled so the longest side <= this
     max_agent_runs_per_hour: int = 20
     max_tool_calls_per_run: int = 40
-    max_qc_retries: int = 2
+    max_qc_retries: int = 1
     stale_run_minutes: int = 10
 
     # --- alignment thresholds (tune on real imagery during Gate 0) ---
