@@ -1,0 +1,54 @@
+import re
+from pathlib import Path
+
+from app.core.config import Settings, production_problems
+from app.db.models import Base
+from app.db.session import normalize_database_url
+
+SCHEMA = (Path(__file__).resolve().parents[1] / "app" / "db" / "schema.sql").read_text()
+
+
+def _sql_columns() -> dict[str, set[str]]:
+    out: dict[str, set[str]] = {}
+    for name, body in re.findall(r"create table (\w+) \(\n(.*?)\n\);", SCHEMA, flags=re.S):
+        cols = set()
+        for line in body.splitlines():
+            m = re.match(r"^  ([a-z0-9_]+) ", line)  # two-space indent = a column (constraints are indented deeper
+            if m and m.group(1) not in {"unique", "primary", "check", "constraint", "foreign"}:
+                cols.add(m.group(1))
+        out[name] = cols
+    return out
+
+
+def test_schema_sql_matches_sqlalchemy_models():
+    sql = _sql_columns()
+    from app.db import models  # noqa: F401
+    model_tables = {t.name: {c.name for c in t.columns} for t in Base.metadata.tables.values()}
+    assert set(sql) == set(model_tables), "tables differ between schema.sql and models.py"
+    for table, cols in model_tables.items():
+        assert sql[table] == cols, f"columns differ for {table}: sql-only={sql[table] - cols}, model-only={cols - sql[table]}"
+
+
+def test_schema_enables_rls_on_every_table():
+    for table in _sql_columns():
+        assert f"alter table {table} enable row level security;" in SCHEMA
+
+
+def test_database_url_is_normalised_for_psycopg3():
+    assert normalize_database_url("postgres://u:p@h:5432/db") == "postgresql+psycopg://u:p@h:5432/db"
+    assert normalize_database_url("postgresql://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
+    assert normalize_database_url("postgresql+psycopg://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
+    assert normalize_database_url("sqlite:///x.db") == "sqlite:///x.db"
+
+
+def test_production_refuses_unsafe_config():
+    base = dict(environment="production")
+    bad = production_problems(Settings(**base, _env_file=None))
+    assert len(bad) >= 4 and any("DEMO_ACCESS_KEY" in p for p in bad)
+    good = Settings(
+        environment="production", demo_access_key="x" * 20, database_url="postgresql://u:p@h/db",
+        storage_backend="supabase", supabase_url="https://x.supabase.co", supabase_service_key="k",
+        frontend_origin="https://greenwatch.example", _env_file=None,
+    )
+    assert production_problems(good) == []
+    assert production_problems(Settings(environment="development", _env_file=None)) == []

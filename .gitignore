@@ -1,0 +1,25 @@
+# secrets / local state
+.env
+.env.*
+!.env.example
+*.db
+storage_data/
+gate0_out/
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# node
+node_modules/
+frontend/dist/
+.vercel/
+
+# os / editors
+.DS_Store
+.idea/
+.vscode/
+greenwatch-blueprint-v3.md

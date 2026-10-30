@@ -1,0 +1,57 @@
+# Render blueprint for the GreenWatch API. The frontend deploys separately on Vercel (root: frontend/).
+# Secrets are marked `sync: false`: Render asks for them in the dashboard and they never live in git.
+# Python: the code was developed and tested on 3.13. If Render's default differs, set PYTHON_VERSION
+# to a 3.12+ version Render offers.
+services:
+  - type: web
+    name: greenwatch-api
+    runtime: python
+    rootDir: backend
+    plan: free  # free tier cold-starts; hit /health before recording the demo
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production  # turns on fail-fast config checks (see app/core/config.py: production_problems)
+      - key: DATABASE_URL  # Supabase Postgres connection string
+        sync: false
+      - key: STORAGE_BACKEND
+        value: supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY  # backend only
+        sync: false
+      - key: STORAGE_BUCKET
+        value: greenwatch
+      - key: DEMO_ACCESS_KEY  # >= 16 random characters; judges get it in the submission notes
+        sync: false
+      - key: FRONTEND_ORIGIN  # your Vercel URL, e.g. https://greenwatch.vercel.app
+        sync: false
+      # Meta Model API: fill from docs/meta-api-notes.md after Gate 0
+      - key: META_API_KEY
+        sync: false
+      - key: META_BASE_URL
+        sync: false
+      - key: META_AUTH_HEADER
+        value: Authorization
+      - key: META_AUTH_SCHEME
+        value: Bearer
+      - key: META_CHAT_PATH
+        value: chat/completions
+      - key: META_SEGMENT_PATH
+        sync: false
+      - key: META_SEGMENT_BODY
+        sync: false
+      - key: META_SEGMENT_MASKS_PATH
+        sync: false
+      - key: SAM_MODEL
+        sync: false
+      - key: AGENT_MODEL
+        sync: false
+      - key: VISION_QC_MODEL
+        sync: false
+      - key: MAX_UPLOAD_MB
+        value: "15"
+      - key: MAX_AGENT_RUNS_PER_HOUR
+        value: "20"

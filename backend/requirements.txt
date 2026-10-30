@@ -1,0 +1,15 @@
+# Runtime. Verified in development with the versions noted in README.md ("Verified with").
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.8
+pydantic-settings>=2.4
+sqlalchemy>=2.0.30
+psycopg[binary]>=3.2
+httpx>=0.27
+python-multipart>=0.0.9
+slowapi>=0.1.9
+pillow>=10.4
+numpy>=1.26
+opencv-python-headless>=4.9
+reportlab>=4.2
+python-dotenv>=1.0

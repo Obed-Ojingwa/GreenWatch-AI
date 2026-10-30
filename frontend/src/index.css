@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-paper: #edf0ee;
+  --color-panel: #f8faf9;
+  --color-ink: #17302e;
+  --color-ink-soft: #4b625f;
+  --color-rule: #c5d0cd;
+  --color-contour: #1f6b66;
+  --color-contour-deep: #17514d;
+  --color-gain: #17804d;
+  --color-loss: #c23b33;
+  --color-warn: #8f5a0e;
+  --color-warn-wash: #f6ebd3;
+  --color-loss-wash: #f8e3e1;
+  --color-gain-wash: #dcf0e5;
+  --radius-ui: 6px;
+}
+
+:root { color-scheme: light; }
+
+html, body, #root { min-height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { letter-spacing: -0.01em; line-height: 1.2; }
+:focus-visible { outline: 2px solid var(--color-contour); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* The survey plate: the one distinctive element. A neatline frame with tick marks, like the margin of a map sheet. */
+.plate {
+  position: relative;
+  background: var(--color-panel);
+  border: 1.5px solid var(--color-ink);
+  padding: 18px;
+}
+.plate::before,
+.plate::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  height: 7px;
+  background-image: repeating-linear-gradient(90deg, var(--color-ink) 0 1px, transparent 1px 24px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.plate::before { top: 5px; }
+.plate::after { bottom: 5px; }
+.plate-inner { position: relative; border: 1px solid var(--color-ink); background: #0e1a19; overflow: hidden; line-height: 0; }
+
+.slider-handle {
+  position: absolute; top: 0; bottom: 0; width: 2px; background: #fff;
+  box-shadow: 0 0 0 1px rgba(23, 48, 46, 0.6);
+  pointer-events: none;
+}
+.slider-handle::after {
+  content: ""; position: absolute; top: 50%; left: 50%; width: 30px; height: 30px; transform: translate(-50%, -50%);
+  background: #fff; border: 1.5px solid var(--color-ink); border-radius: 50%;
+  background-image: linear-gradient(90deg, transparent 11px, var(--color-ink) 11px 12px, transparent 12px 17px, var(--color-ink) 17px 18px, transparent 18px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pulse-dot { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+}
+
+dialog::backdrop { background: rgba(23, 48, 46, 0.45); }
