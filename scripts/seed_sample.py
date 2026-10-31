@@ -41,7 +41,7 @@ sys.path.insert(0, str(BACKEND))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.core.config import get_settings  # noqa: E402
+from app.core.config import get_settings, production_problems  # noqa: E402
 
 
 def main() -> int:
@@ -53,15 +53,30 @@ def main() -> int:
     ap.add_argument("--earlier-date")
     ap.add_argument("--newer", required=True)
     ap.add_argument("--newer-date")
-    ap.add_argument("--source", default=None)
+    ap.add_argument("--source", required=True, help="public source and attribution recorded for the imagery")
     ap.add_argument("--lat", type=float)
     ap.add_argument("--lng", type=float)
     ap.add_argument("--categories", default="buildings")
+    ap.add_argument("--confirm-public-rights", action="store_true",
+                    help="confirm both source images and derived outputs are cleared for public use")
     ap.add_argument("--accept-review-required", action="store_true",
                     help="also publish a sample whose run ended 'review_required' (it will be shown as such)")
     args = ap.parse_args(args_pre)
 
+    if not args.confirm_public_rights:
+        print("Refusing to seed: pass --confirm-public-rights only after confirming image and output rights.")
+        return 2
+
     s = get_settings()
+    if s.environment.lower() != "production":
+        print("Refusing to seed: ENVIRONMENT must be 'production'.")
+        return 2
+    problems = production_problems(s)
+    if problems:
+        print("Refusing to seed: production configuration is unsafe or incomplete:")
+        for problem in problems:
+            print(f"  - {problem}")
+        return 2
     if not (s.meta_api_key and s.meta_base_url and s.agent_model and s.sam_model):
         print("Meta API is not configured; a sample must come from a real run. Finish Gate 0 first.")
         return 2

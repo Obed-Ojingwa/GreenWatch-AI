@@ -10,11 +10,11 @@ Built solo for the Meta Global AI Developer Hackathon (Indie Developer track, "B
 
 ## Status
 
-The application is built and tested locally. **It has not yet been run against the live Meta API.** See [`docs/REMAINING.md`](docs/REMAINING.md) for exactly what is verified, what is not, and what is left to do before submission.
+The backend and frontend deployment URLs respond, but the latest production check (Oct 30, 2026) found that the backend reports `development` and rejects CORS requests from the deployed frontend. Production use is not verified, and no public sample is currently seeded. The owner has confirmed public-use rights for the selected imagery; record source and attribution details before release, and do not publish until the production configuration is corrected.
 
 ## What was built during the hackathon
 
-Everything in this repository was built between Oct 27 and Nov 4, 2026, from scratch, by one person. No code, data or assets from any employer or prior product are used. (Keep this section accurate, and commit often: the git history is the evidence.)
+This project was built solo for the Meta Global AI Developer Hackathon (Indie Developer track, "Build for Your World"). No code, data or assets from any employer or prior product are used.
 
 ## How it works
 
@@ -65,7 +65,7 @@ cd frontend && npm run typecheck && npm run build
 
 ### Configure Meta (Gate 0)
 
-The Meta adapter is configuration-driven and **unverified until you run Gate 0**:
+The Meta adapter is configuration-driven. Verify it against the real provider with Gate 0 before describing a live run as validated:
 
 ```bash
 cd backend
@@ -73,7 +73,7 @@ python ../scripts/gate0.py probe --image /path/to/earlier.jpg      # shows the r
 python ../scripts/gate0.py run --earlier earlier.jpg --newer newer.jpg
 ```
 
-Record the findings in [`docs/meta-api-notes.md`](docs/meta-api-notes.md).
+Record sanitized findings in `docs/meta-api-notes.md`; never record credentials, signed URLs, or private image data.
 
 ### Development data (never for the demo)
 
@@ -85,11 +85,11 @@ Record the findings in [`docs/meta-api-notes.md`](docs/meta-api-notes.md).
 - **Backend (Render):** create the web service from [`render.yaml`](render.yaml). Set its dashboard environment values: `DATABASE_URL` (Supabase Postgres connection string with SSL enabled), `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `DEMO_ACCESS_KEY` (random, at least 16 characters), exact deployed `FRONTEND_ORIGIN`, and the verified Meta values from Gate 0 (`META_API_KEY`, `META_BASE_URL`, `META_AUTH_HEADER`, `META_AUTH_SCHEME`, `META_CHAT_PATH`, `META_SEGMENT_PATH`, `META_SEGMENT_BODY`, `META_SEGMENT_MASKS_PATH`, `SAM_MODEL`, `AGENT_MODEL`, and optional `VISION_QC_MODEL`). Keep all credentials on Render; the Supabase service key must never be set in Vercel. Production startup refuses unsafe core configuration (weak demo key, SQLite, local storage, localhost CORS).
 - **Frontend (Vercel):** import the repository with root directory `frontend/`; set only `VITE_API_BASE_URL` to the deployed Render API URL. Never expose Meta or Supabase credentials as `VITE_*` variables.
 - **Smoke checks:** after you deploy, visit Render `/health`, then use the app to create an investigation and upload an authorized test image with the demo key. Confirm the image/report links load from the private bucket via signed URLs. In Supabase, verify the bucket is still private and unauthenticated object access is denied. Then verify writes fail without the demo key and succeed with it. Share sanitized status codes/log excerpts only; never share credentials or signed URLs.
-- **Public sample:** `python ../scripts/seed_sample.py ...` from a *real* run (see the script header).
+- **Public sample:** the sample must use a real provider run and imagery with confirmed public-use rights. `scripts/seed_sample.py` creates a new investigation and calls the configured Meta API; it is not a no-cost way to publish an existing run. After production is verified, configure the local ignored `backend/.env` for the production database/storage and verified Meta settings, then run the script with `--confirm-public-rights`. This may incur provider costs; do not paste or commit those credentials.
 
 ## Demo access
 
-The sample investigation is public and read-only. Starting a new analysis needs the demo access key, which is given in the submission notes (it protects the model credits behind the app).
+Once an approved real run is explicitly designated as the sample, it is public and read-only. As of the latest production check, no sample is seeded. Starting a new analysis needs the demo access key, which belongs in submission notes only (it protects the model credits behind the app).
 
 ## Limitations
 
@@ -101,7 +101,7 @@ Pixel-level change is not real-world area unless the imagery is georeferenced in
 backend/    FastAPI app (app/), tests (tests/), schema (app/db/schema.sql)
 frontend/   React app
 scripts/    gate0.py, seed_sample.py, dev_fake_run.py
-docs/       architecture, build plan, remaining work, Meta API notes, data sources, demo script
+docs/       architecture, Meta API notes, data sources, and demo script (planning docs remain local)
 render.yaml Render blueprint for the API
 ```
 
