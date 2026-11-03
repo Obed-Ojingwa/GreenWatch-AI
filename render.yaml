@@ -45,6 +45,8 @@ services:
         sync: false
       - key: META_SEGMENT_MASKS_PATH
         sync: false
+      - key: META_SAM_MASK_ENCODING
+        value: one_bit
       - key: SAM_MODEL
         sync: false
       - key: AGENT_MODEL

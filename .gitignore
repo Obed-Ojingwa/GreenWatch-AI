@@ -24,4 +24,11 @@ frontend/dist/
 .vscode/
 greenwatch-blueprint-v3.md
 docs/
+docs/*
+!docs/architecture.md
+docs/data-sources.md
+docs/demo-script.md
+docs/meta-api-notes.md
 Do_now.md
+Todo.md
+

@@ -33,3 +33,12 @@ Result of `scripts/gate0.py run` on this pair (date, pass/fail, link to notes): 
 ## Synthetic data
 
 `scripts/dev_fake_run.py` and the test suite generate computer-made images with a scripted fake model. They are for development only and must never appear in the demo video, the public sample or the submission. Everything it creates is titled `[SYNTHETIC DEV DATA]`.
+
+## OpenAerialMap research leads (not used in the demo or sample)
+
+The current map is [imagery.hotosm.org](https://imagery.hotosm.org/?z=15&lat=6.4978&lng=3.3909), centered near Makoko, Lagos. Catalog leads found during research:
+
+- “Makoko” by Uhurulabs, captured 2019-10-02; catalog bounds 3.384854, 6.490230 to 3.397062, 6.505367; listed GSD about 0.054 m.
+- “Maxar 2019 Lagos Mosaic” by Maxar, captured 2019-06-05; catalog bounds 3.080997, 6.350414 to 3.748394, 6.869687; listed GSD 0.5 m and overlaps the Makoko bounds.
+
+These are leads only, not a validated before/after pair. The catalog item license fields were blank. [OAM's legal page](https://openaerialmap.org/legal) describes CC BY 4.0 for OIN imagery but preserves original contributors' copyright; verify each item's rights, attribution, dates, and visible change before downloading, using, or publishing it. Neither image has been downloaded or used in the project.

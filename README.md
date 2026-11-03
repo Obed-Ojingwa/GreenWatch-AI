@@ -10,7 +10,7 @@ Built solo for the Meta Global AI Developer Hackathon (Indie Developer track, "B
 
 ## Status
 
-The backend and frontend deployment URLs respond, but the latest production check (Oct 30, 2026) found that the backend reports `development` and rejects CORS requests from the deployed frontend. Production use is not verified, and no public sample is currently seeded. The owner has confirmed public-use rights for the selected imagery; record source and attribution details before release, and do not publish until the production configuration is corrected.
+Release status is **blocked**: on Nov 3, 2026, Render `/health` returned `200` with `environment=development`; an `OPTIONS` preflight from the deployed Vercel origin returned `400` without an allow-origin header; and the public investigation list returned `200` with zero entries. Set `ENVIRONMENT=production` and `FRONTEND_ORIGIN=https://greenwatch-ai-theta.vercel.app` in the Render service dashboard, redeploy, then repeat the health/CORS checks. Do not run production smoke tests or seed a public sample until they pass. No real-provider Gate 0 result or production sample is verified here. A prior local imagery pair was authorized for public use; its source and attribution still need to be recorded in [`docs/data-sources.md`](docs/data-sources.md).
 
 ## What was built during the hackathon
 
@@ -65,15 +65,15 @@ cd frontend && npm run typecheck && npm run build
 
 ### Configure Meta (Gate 0)
 
-The Meta adapter is configuration-driven. Verify it against the real provider with Gate 0 before describing a live run as validated:
+The Meta key belongs in the ignored `backend/.env` file for a local Gate 0 run, or in the Render service's environment dashboard for deployment. Do not put it in Vercel, `VITE_*`, source control, or chat. The documented SAM Responses contract is implemented, but verify it against your account with Gate 0 before describing a live run as validated:
 
 ```bash
 cd backend
-python ../scripts/gate0.py probe --image /path/to/earlier.jpg      # shows the raw SAM response shape
+python ../scripts/gate0.py probe --image /path/to/earlier.jpg      # prints sanitized mask counts/dimensions
 python ../scripts/gate0.py run --earlier earlier.jpg --newer newer.jpg
 ```
 
-Record sanitized findings in `docs/meta-api-notes.md`; never record credentials, signed URLs, or private image data.
+The Responses probe does not print or save raw mask-token output. The legacy JSON probe writes raw response data under ignored `gate0_out/`. Record only sanitized findings in [`docs/meta-api-notes.md`](docs/meta-api-notes.md); never record credentials, signed URLs, or private image data.
 
 ### Development data (never for the demo)
 
@@ -82,7 +82,7 @@ Record sanitized findings in `docs/meta-api-notes.md`; never record credentials,
 ## Deploy
 
 - **Database (Supabase):** create a project and run [`supabase_migrations/20261030164200_initial_schema.sql`](supabase_migrations/20261030164200_initial_schema.sql) once in the SQL editor (it mirrors `backend/app/db/schema.sql`). Create a **private** Storage bucket named `greenwatch`; do not add public bucket policies.
-- **Backend (Render):** create the web service from [`render.yaml`](render.yaml). Set its dashboard environment values: `DATABASE_URL` (Supabase Postgres connection string with SSL enabled), `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `DEMO_ACCESS_KEY` (random, at least 16 characters), exact deployed `FRONTEND_ORIGIN`, and the verified Meta values from Gate 0 (`META_API_KEY`, `META_BASE_URL`, `META_AUTH_HEADER`, `META_AUTH_SCHEME`, `META_CHAT_PATH`, `META_SEGMENT_PATH`, `META_SEGMENT_BODY`, `META_SEGMENT_MASKS_PATH`, `SAM_MODEL`, `AGENT_MODEL`, and optional `VISION_QC_MODEL`). Keep all credentials on Render; the Supabase service key must never be set in Vercel. Production startup refuses unsafe core configuration (weak demo key, SQLite, local storage, localhost CORS).
+- **Backend (Render):** create the web service from [`render.yaml`](render.yaml). Set its dashboard environment values: `DATABASE_URL` (Supabase Postgres connection string with SSL enabled), `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `DEMO_ACCESS_KEY` (random, at least 16 characters), exact deployed `FRONTEND_ORIGIN`, and verified Meta values (`META_API_KEY`, `META_BASE_URL`, `META_AUTH_HEADER`, `META_AUTH_SCHEME`, `META_CHAT_PATH`, `META_SEGMENT_PATH`, `SAM_MODEL`, `AGENT_MODEL`, and optional `VISION_QC_MODEL`). SAM's Responses mode does not require `META_SEGMENT_BODY` or `META_SEGMENT_MASKS_PATH`; those apply only to legacy JSON endpoints. Keep all credentials on Render; the Supabase service key must never be set in Vercel. Production startup refuses unsafe core configuration (weak demo key, SQLite, local storage, localhost CORS).
 - **Frontend (Vercel):** import the repository with root directory `frontend/`; set only `VITE_API_BASE_URL` to the deployed Render API URL. Never expose Meta or Supabase credentials as `VITE_*` variables.
 - **Smoke checks:** after you deploy, visit Render `/health`, then use the app to create an investigation and upload an authorized test image with the demo key. Confirm the image/report links load from the private bucket via signed URLs. In Supabase, verify the bucket is still private and unauthenticated object access is denied. Then verify writes fail without the demo key and succeed with it. Share sanitized status codes/log excerpts only; never share credentials or signed URLs.
 - **Public sample:** the sample must use a real provider run and imagery with confirmed public-use rights. `scripts/seed_sample.py` creates a new investigation and calls the configured Meta API; it is not a no-cost way to publish an existing run. After production is verified, configure the local ignored `backend/.env` for the production database/storage and verified Meta settings, then run the script with `--confirm-public-rights`. This may incur provider costs; do not paste or commit those credentials.
@@ -94,6 +94,8 @@ Once an approved real run is explicitly designated as the sample, it is public a
 ## Limitations
 
 Pixel-level change is not real-world area unless the imagery is georeferenced in a projected CRS. Alignment is one global transform with an overlap check, not tile-level registration. Segmentation quality depends on the imagery; the AI-assisted quality check reduces but does not remove the need for human review.
+
+The SAM adapter uses Meta's `meta-sam-parser` package (Meta SAM License); that dependency's terms are separate from this project's MIT license.
 
 ## Layout
 

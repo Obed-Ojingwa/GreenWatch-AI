@@ -1,16 +1,8 @@
 """All HTTP to the Meta Model API lives here.
 
-NOTHING in this file has been verified against the live API yet. Gate 0 (scripts/gate0.py) exists to
-confirm it. The adapter is deliberately configuration-driven so that most Gate 0 findings need only
-.env changes, not code changes:
-
-  * chat: assumed OpenAI-style chat completions (messages, tools, tool_calls, response_format,
-    image_url parts). Path/model/auth header are configurable.
-  * segmentation: the request body is a JSON template (META_SEGMENT_BODY) and the location of the
-    masks in the response is a dotted path (META_SEGMENT_MASKS_PATH); each mask is decoded by
-    app.services.mask_codec, which understands PNG/base64, COCO RLE, polygons and raw rasters.
-
-Record what you learn in docs/meta-api-notes.md.
+Muse Spark uses the OpenAI-compatible Chat Completions adapter. SAM uses the Responses API stream
+when META_SEGMENT_PATH ends in ``responses``; other paths retain the configurable JSON-mask adapter.
+The live provider contract still requires Gate 0 verification against the configured account.
 """
 from __future__ import annotations
 
@@ -30,6 +22,7 @@ from PIL import Image
 from app.core.config import Settings, get_settings
 from app.core.errors import MetaApiError
 from app.services.mask_codec import decode_mask
+from app.services import sam_responses
 
 log = logging.getLogger("greenwatch.meta")
 
@@ -179,17 +172,45 @@ class HttpMetaClient:
     # segmentation ---------------------------------------------------------------------------------
     def segment(self, image_png: bytes, prompt: str) -> list[np.ndarray]:
         s = self.s
-        if not (s.meta_segment_path and s.meta_segment_body and s.meta_segment_masks_path):
+        if not s.meta_segment_path:
             raise MetaApiError(
-                "The SAM segmentation contract is not configured: set META_SEGMENT_PATH, META_SEGMENT_BODY "
-                "and META_SEGMENT_MASKS_PATH from the Meta docs (see docs/meta-api-notes.md)."
+                "The SAM segmentation contract is not configured: set META_SEGMENT_PATH "
+                "(see docs/meta-api-notes.md)."
+            )
+        with Image.open(io.BytesIO(image_png)) as im:
+            width, height = im.size
+        if sam_responses.is_responses_path(s.meta_segment_path):
+            if not s.meta_base_url:
+                raise MetaApiError("META_BASE_URL is not set; configure the Meta API (see docs/meta-api-notes.md).")
+            if not s.meta_api_key:
+                raise MetaApiError("META_API_KEY is not set.")
+            body = sam_responses.build_body(
+                model=s.sam_model,
+                prompt=prompt,
+                image_png=image_png,
+                mask_encoding=s.meta_sam_mask_encoding,
+            )
+            reply = sam_responses.request(
+                base_url=s.meta_base_url,
+                path=s.meta_segment_path,
+                headers=self._headers(),
+                timeout=s.meta_timeout_seconds,
+                retries=s.meta_max_retries,
+                body=body,
+            )
+            if not reply.completed:
+                raise MetaApiError("SAM Responses API stream did not complete successfully.")
+            return sam_responses.parse_masks(reply.text, width, height)
+
+        if not (s.meta_segment_body and s.meta_segment_masks_path):
+            raise MetaApiError(
+                "The configured JSON SAM contract requires META_SEGMENT_BODY and "
+                "META_SEGMENT_MASKS_PATH (see docs/meta-api-notes.md)."
             )
         try:
             template = json.loads(s.meta_segment_body)
         except ValueError as exc:
             raise MetaApiError(f"META_SEGMENT_BODY is not valid JSON: {exc}") from exc
-        with Image.open(io.BytesIO(image_png)) as im:
-            width, height = im.size
         b64 = _b64(image_png)
         body = fill_template(template, {
             "{{model}}": s.sam_model, "{{prompt}}": prompt,

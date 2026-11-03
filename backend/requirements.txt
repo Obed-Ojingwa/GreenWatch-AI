@@ -13,3 +13,4 @@ numpy>=1.26
 opencv-python-headless>=4.9
 reportlab>=4.2
 python-dotenv>=1.0
+meta-sam-parser==0.1.0

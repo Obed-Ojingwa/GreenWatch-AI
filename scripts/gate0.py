@@ -4,11 +4,12 @@
 Run from the backend folder so backend/.env is picked up:
 
     cd backend
-    python ../scripts/gate0.py probe --image /path/to/earlier.jpg          # discover the SAM response shape
+    python ../scripts/gate0.py probe --image /path/to/earlier.jpg          # sanitized SAM mask summary
     python ../scripts/gate0.py run   --earlier a.jpg --newer b.jpg         # the full Gate 0 checklist
 
-`probe` posts ONE real request using your META_SEGMENT_* settings and prints the structure of the raw
-response plus candidate values for META_SEGMENT_MASKS_PATH (each one test-decoded). Use it first.
+`probe` posts ONE real request using your META_SEGMENT_* settings. For the Responses API it writes
+only sanitized mask counts and dimensions; for the legacy JSON adapter it inspects candidate mask paths.
+Use it first.
 
 `run` checks, in order, and exits 0 only if every check passes:
     config            required settings are present
@@ -61,6 +62,7 @@ from app.core.config import get_settings  # noqa: E402
 from app.core.errors import MetaApiError  # noqa: E402
 from app.services.mask_codec import decode_mask  # noqa: E402
 from app.services.meta_client import HttpMetaClient, extract_path, fill_template  # noqa: E402
+from app.services import sam_responses  # noqa: E402
 from app.services.quality import mask_stats, vision_review  # noqa: E402
 from app.services.segmentation import make_overlay  # noqa: E402
 
@@ -171,6 +173,23 @@ def cmd_probe(args: argparse.Namespace) -> int:
     OUT.mkdir(exist_ok=True)
     png, _ = load_png(_abs(args.image), s.max_image_dim)
     client = HttpMetaClient(s)
+    if sam_responses.is_responses_path(s.meta_segment_path):
+        t0 = time.perf_counter()
+        masks = client.segment(png, args.prompt)
+        dt = time.perf_counter() - t0
+        summary = {
+            "endpoint_mode": "responses-stream",
+            "prompt": args.prompt,
+            "mask_count": len(masks),
+            "masks": [
+                {"width": int(mask.shape[1]), "height": int(mask.shape[0]), "pixels": int(np.count_nonzero(mask))}
+                for mask in masks
+            ],
+        }
+        (OUT / "probe_summary.json").write_text(json.dumps(summary, indent=2))
+        banner(f"sanitized SAM response ({dt:.2f}s) -> gate0_out/probe_summary.json")
+        print(json.dumps(summary, indent=2))
+        return 0
     body = segment_body(s, png, args.prompt)
     t0 = time.perf_counter()
     data = client._post(s.meta_segment_path, body)  # noqa: SLF001  (raw on purpose)
@@ -206,11 +225,15 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     banner("config")
     required = {"META_API_KEY": s.meta_api_key, "META_BASE_URL": s.meta_base_url, "AGENT_MODEL": s.agent_model,
-                "SAM_MODEL": s.sam_model, "META_SEGMENT_PATH": s.meta_segment_path,
-                "META_SEGMENT_MASKS_PATH": s.meta_segment_masks_path}
+                "SAM_MODEL": s.sam_model, "META_SEGMENT_PATH": s.meta_segment_path}
+    if not sam_responses.is_responses_path(s.meta_segment_path):
+        required["META_SEGMENT_MASKS_PATH"] = s.meta_segment_masks_path
     missing = [k for k, v in required.items() if not v]
     if not ck.record("config", not missing, "all required settings present" if not missing else "missing: " + ", ".join(missing)):
-        print("Run `probe` first to discover META_SEGMENT_MASKS_PATH; fill the rest from the Meta docs.")
+        if sam_responses.is_responses_path(s.meta_segment_path):
+            print("Set the missing provider settings from the official Meta docs, then run `probe`.")
+        else:
+            print("Run `probe` first to discover META_SEGMENT_MASKS_PATH; fill the rest from the Meta docs.")
     client = HttpMetaClient(s)
 
     earlier_path = _abs(args.earlier)
@@ -319,7 +342,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("probe", help="post one SAM request and print the raw response structure")
+    p = sub.add_parser("probe", help="post one SAM request and print a sanitized summary for Responses mode")
     p.add_argument("--image", required=True)
     p.add_argument("--prompt", default="buildings")
     r = sub.add_parser("run", help="run the full Gate 0 checklist")

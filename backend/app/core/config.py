@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     meta_segment_path: str = ""
     meta_segment_body: str = DEFAULT_SEGMENT_BODY  # JSON template: {{model}} {{prompt}} {{image_b64}} {{image_data_uri}}
     meta_segment_masks_path: str = ""  # where the masks are in the response; end with ".*" to enumerate instances
+    meta_sam_mask_encoding: str = "one_bit"  # Responses API metadata.mask_encoding
     sam_model: str = ""
     agent_model: str = ""
     vision_qc_model: str = ""  # defaults to agent_model when empty

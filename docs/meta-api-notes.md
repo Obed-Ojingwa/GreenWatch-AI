@@ -1,16 +1,16 @@
-# Meta Model API: verified facts
+# Meta Model API: documented contract and Gate 0 results
 
-**Nothing below is verified yet.** Fill this in during Gate 0 (`scripts/gate0.py probe` and `run`) and keep it current. Every value here maps to a setting in `backend/.env`. Never paste API keys into this file.
+The request shapes below reflect Meta's published API contract, not a successful request from this project's account. Run Gate 0 and record only sanitized account-specific results. Never paste API keys, raw mask output, signed URLs, or private image data into this file.
 
-Date verified: ____  Verified by: ____
+Gate 0 date: ____  Pair description (no private filenames): ____  Overall result: ____
 
 ## Access
 
 | Item | Value | Setting |
 |---|---|---|
-| Base URL | | `META_BASE_URL` |
-| Auth header name | | `META_AUTH_HEADER` |
-| Auth scheme (`Bearer`, empty for raw key, ...) | | `META_AUTH_SCHEME` |
+| Base URL | `https://api.meta.ai/v1` (documented; account access not tested) | `META_BASE_URL` |
+| Auth header name | `Authorization` (documented) | `META_AUTH_HEADER` |
+| Auth scheme | `Bearer` (documented) | `META_AUTH_SCHEME` |
 | Credits visible under Billing -> free credits? | | n/a |
 | Spend-limit alert set? | | n/a |
 | Rate limits / quotas seen | | n/a |
@@ -19,8 +19,8 @@ Date verified: ____  Verified by: ____
 
 | Item | Value | Setting |
 |---|---|---|
-| Chat path | | `META_CHAT_PATH` |
-| Model id for the agent | | `AGENT_MODEL` |
+| Chat path | `chat/completions` (documented OpenAI-compatible API) | `META_CHAT_PATH` |
+| Model id for the agent | `muse-spark-1.3` (verify access) | `AGENT_MODEL` |
 | Model id for vision QC (blank = same as agent) | | `VISION_QC_MODEL` |
 | Request format matches OpenAI-style chat completions? (messages, `tools`, `tool_calls`, `response_format`, `image_url` parts) | | code: `HttpMetaClient.chat` / `_parse_chat` |
 | Image input format that worked | | |
@@ -33,13 +33,14 @@ Date verified: ____  Verified by: ____
 
 | Item | Value | Setting |
 |---|---|---|
-| Endpoint path | | `META_SEGMENT_PATH` |
-| Model id | | `SAM_MODEL` |
-| Request body template (placeholders: `{{model}}`, `{{prompt}}`, `{{image_b64}}`, `{{image_data_uri}}`) | | `META_SEGMENT_BODY` |
-| Where the masks are in the response (dotted path; `*` fans out over a list) | | `META_SEGMENT_MASKS_PATH` |
-| Mask encoding (base64 PNG / COCO RLE / polygon / raw) | | decoded by `app/services/mask_codec.py` |
+| Endpoint path | `responses` (documented) | `META_SEGMENT_PATH` |
+| Model id | `sam-3.1` (verify access) | `SAM_MODEL` |
+| Request | `stream: true`; one user message containing `input_text` and a PNG `input_image` data URI | implemented in `app/services/sam_responses.py` |
+| Mask output | `response.output_text.delta` SSE events, terminated by `response.completed` | implemented in `app/services/sam_responses.py` |
+| Mask encoding | Responses metadata `mask_encoding: one_bit`; special-token records decoded with Meta's public `meta-sam-parser` API | `META_SAM_MASK_ENCODING` |
+| JSON body template and mask path | Not used in Responses mode; only required by the legacy JSON adapter | `META_SEGMENT_BODY`, `META_SEGMENT_MASKS_PATH` |
 | Max image size / dimensions accepted | | `MAX_IMAGE_DIM` |
-| What an empty detection looks like | | |
+| What an empty detection looks like | Completed output with no segmentation records |
 | Latency per image | | |
 | Prompts that worked well on your imagery (`buildings`, `trees`, `vegetation`, ...) | | |
 | Prompts that did not | | |
@@ -49,7 +50,7 @@ Date verified: ____  Verified by: ____
 | Item | Value |
 |---|---|
 | Provider (Baseten / Modal) and credits granted? | |
-| Base URL and key (needs a per-model override; see `docs/REMAINING.md`) | |
+| Base URL and key (per-model override is not currently implemented) | |
 | Model id (hackathon guide says `meta-models/muse-spark-open-1026` on Baseten) | |
 | Tool calling reliable enough for the agent loop? | |
 
