@@ -90,6 +90,15 @@ def test_production_refuses_unsafe_config():
         environment="production", demo_access_key="x" * 20, database_url="postgresql://u:p@h/db",
         storage_backend="supabase", supabase_url="https://x.supabase.co", supabase_service_key="k",
         frontend_origin="https://greenwatch.example", _env_file=None,
+        meta_api_key="k", meta_base_url="https://api.meta.ai/v1", agent_model="muse-spark-1.3",
+        sam_model="sam-3.1", meta_chat_path="chat/completions", meta_segment_path="responses",
     )
     assert production_problems(good) == []
+    weak_demo_key = good.model_copy(update={"demo_access_key": "change-me-to-a-long-random-string"})
+    assert any("DEMO_ACCESS_KEY" in problem for problem in production_problems(weak_demo_key))
+    bad_storage_url = Settings(**{
+        **good.model_dump(),
+        "supabase_url": 'https://x.supabase.co"',
+    }, _env_file=None)
+    assert any("SUPABASE_URL" in problem for problem in production_problems(bad_storage_url))
     assert production_problems(Settings(environment="development", _env_file=None)) == []

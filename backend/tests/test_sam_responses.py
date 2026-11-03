@@ -124,6 +124,19 @@ def test_responses_stream_must_complete_and_be_valid_json(monkeypatch):
         )
 
 
+def test_responses_http_errors_include_endpoint_and_model(monkeypatch):
+    _mock_http(monkeypatch, lambda _: httpx.Response(404))
+    with pytest.raises(MetaApiError, match=r"endpoint 'responses' model 'sam-3.1'"):
+        sam_responses.request(
+            base_url="https://api.example.test/v1",
+            path="responses",
+            headers={},
+            timeout=10,
+            retries=1,
+            body={"model": "sam-3.1"},
+        )
+
+
 def test_sam_mask_is_placed_in_frame_and_only_latest_revision_is_used(monkeypatch):
     mask_text = "<0f>0<|mask;x=2;y=1;data=2,2,!!!!|>"
     earlier = SimpleNamespace(

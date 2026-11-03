@@ -130,6 +130,13 @@ def test_retries_5xx_but_not_4xx(monkeypatch):
         assert state.chat_attempts == 1  # a 401 is not retried
 
 
+def test_chat_error_includes_endpoint_and_model_without_request_payload(monkeypatch):
+    with RunningServer(MockState(FakeMeta())) as srv:
+        _configure(monkeypatch, srv, meta_chat_path="missing")
+        with pytest.raises(MetaApiError, match=r"endpoint 'missing' model 'muse-spark-1.3'"):
+            HttpMetaClient().chat([{"role": "user", "content": "hi"}], model="muse-spark-1.3")
+
+
 # ---- the whole agent over real HTTP --------------------------------------------------------------
 
 @pytest.mark.parametrize("fmt", ["png", "rle_str"])

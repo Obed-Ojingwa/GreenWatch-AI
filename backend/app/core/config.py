@@ -80,7 +80,7 @@ def production_problems(s: Settings) -> list[str]:
     if s.environment.lower() != "production":
         return []
     problems: list[str] = []
-    if len(s.demo_access_key) < 16:
+    if len(s.demo_access_key) < 16 or s.demo_access_key == "change-me-to-a-long-random-string":
         problems.append("DEMO_ACCESS_KEY must be set to a random value of at least 16 characters.")
     if s.database_url.startswith("sqlite"):
         problems.append("DATABASE_URL must point at Postgres (Supabase), not SQLite.")
@@ -88,7 +88,26 @@ def production_problems(s: Settings) -> list[str]:
         problems.append("STORAGE_BACKEND must be 'supabase' in production.")
     elif not s.supabase_url or not s.supabase_service_key:
         problems.append("SUPABASE_URL and SUPABASE_SERVICE_KEY are required for Supabase storage.")
+    if s.supabase_url and (
+        not s.supabase_url.startswith("https://")
+        or any(char.isspace() for char in s.supabase_url)
+        or '"' in s.supabase_url
+        or "'" in s.supabase_url
+    ):
+        problems.append("SUPABASE_URL must be the bare HTTPS project URL without quotes or whitespace.")
     origins = [o.strip() for o in s.frontend_origin.split(",") if o.strip()]
     if not origins or any("localhost" in o or "127.0.0.1" in o for o in origins):
         problems.append("FRONTEND_ORIGIN must list the deployed frontend URL(s), not localhost.")
+    if not s.meta_api_key:
+        problems.append("META_API_KEY is required for production analysis.")
+    if not s.meta_base_url or not s.meta_base_url.startswith("https://"):
+        problems.append("META_BASE_URL must be set to the HTTPS Meta Model API base URL.")
+    for name, value in (
+        ("AGENT_MODEL", s.agent_model),
+        ("SAM_MODEL", s.sam_model),
+        ("META_CHAT_PATH", s.meta_chat_path),
+        ("META_SEGMENT_PATH", s.meta_segment_path),
+    ):
+        if not value:
+            problems.append(f"{name} must be set for production analysis.")
     return problems

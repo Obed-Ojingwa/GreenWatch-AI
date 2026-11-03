@@ -143,6 +143,9 @@ class HttpMetaClient:
         if not s.meta_api_key:
             raise MetaApiError("META_API_KEY is not set.")
         url = s.meta_base_url.rstrip("/") + "/" + path.lstrip("/")
+        endpoint = path.split("?", 1)[0].rstrip("/")
+        model = str(body.get("model") or "<unset>")
+        request_context = f"endpoint '{endpoint}' model '{model}'"
         attempts = max(1, int(s.meta_max_retries))
         last: MetaApiError | None = None
         with httpx.Client(timeout=s.meta_timeout_seconds) as http:
@@ -151,14 +154,23 @@ class HttpMetaClient:
                 try:
                     resp = http.post(url, json=body, headers=self._headers())
                 except (httpx.TimeoutException, httpx.TransportError) as exc:
-                    last = MetaApiError(f"Meta API request failed: {type(exc).__name__}: {exc}")
+                    last = MetaApiError(f"Meta API request failed for {request_context}: {type(exc).__name__}: {exc}")
                     log.warning("meta transport error (attempt %s/%s): %s", attempt + 1, attempts, exc)
                 else:
-                    log.info("meta POST %s -> %s in %.2fs", path, resp.status_code, perf_counter() - t0)
+                    log.info(
+                        "meta POST endpoint=%s model=%s -> %s in %.2fs",
+                        endpoint, model, resp.status_code, perf_counter() - t0,
+                    )
                     if resp.status_code == 429 or resp.status_code >= 500:
-                        last = MetaApiError(f"Meta API {resp.status_code}: {resp.text[:300]}", resp.status_code)
+                        last = MetaApiError(
+                            f"Meta API {resp.status_code} for {request_context}: {resp.text[:300]}",
+                            resp.status_code,
+                        )
                     elif resp.status_code >= 400:
-                        raise MetaApiError(f"Meta API {resp.status_code}: {resp.text[:500]}", resp.status_code)
+                        raise MetaApiError(
+                            f"Meta API {resp.status_code} for {request_context}: {resp.text[:500]}",
+                            resp.status_code,
+                        )
                     else:
                         try:
                             return resp.json()

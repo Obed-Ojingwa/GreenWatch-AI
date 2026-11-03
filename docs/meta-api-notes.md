@@ -29,6 +29,24 @@ Gate 0 date: ____  Pair description (no private filenames): ____  Overall result
 | Typical latency per call / per image | | |
 | Approx. cost per call | | |
 
+### `model_not_found` troubleshooting
+
+The public model IDs are valid request identifiers; that alone does not establish that the API key's
+account can use them. The backend reports the endpoint and model identifier for each provider error:
+
+- `chat/completions` with `AGENT_MODEL` (or `VISION_QC_MODEL`): verify the Muse Spark model ID and
+  that the API key/account has Model API access.
+- `responses` with `SAM_MODEL`: verify SAM access separately; a successful Muse Spark call does not
+  prove SAM access.
+
+The app's `META_API_KEY` setting is sent as `Authorization: Bearer ...`; the environment variable
+name is app-specific. Keep the key only in Render's backend environment, never in Vercel or chat.
+Use Gate 0 to test the account; do not share keys, image contents, or raw provider payloads.
+
+Official references: [Quickstart](https://dev.meta.ai/docs/quickstart),
+[Chat Completions](https://dev.meta.ai/docs/protocols/chat-completions), and
+[Media segmentation](https://dev.meta.ai/docs/media-segmentation).
+
 ## SAM 3.1 (segmentation)
 
 | Item | Value | Setting |

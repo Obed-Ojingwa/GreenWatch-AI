@@ -180,24 +180,36 @@ def request(
     attempts = max(1, int(retries))
     last_error: MetaApiError | None = None
     url = _url(base_url, path)
+    endpoint = urlsplit(path).path.rstrip("/") or path.split("?", 1)[0].rstrip("/")
+    model = str(body.get("model") or "<unset>")
+    request_context = f"endpoint '{endpoint}' model '{model}'"
     with httpx.Client(timeout=timeout) as client:
         for attempt in range(attempts):
             started = time.perf_counter()
             try:
                 with client.stream("POST", url, json=body, headers=headers) as response:
-                    log.info("SAM Responses POST -> %s in %.2fs", response.status_code, time.perf_counter() - started)
+                    log.info(
+                        "SAM Responses POST endpoint=%s model=%s -> %s in %.2fs",
+                        endpoint, model, response.status_code, time.perf_counter() - started,
+                    )
                     if response.status_code == 429 or response.status_code >= 500:
-                        last_error = MetaApiError(f"SAM Responses API returned HTTP {response.status_code}.",
-                                                  response.status_code)
+                        last_error = MetaApiError(
+                            f"SAM Responses API returned HTTP {response.status_code} for {request_context}.",
+                            response.status_code,
+                        )
                     elif response.status_code >= 300:
-                        raise MetaApiError(f"SAM Responses API returned HTTP {response.status_code}.",
-                                           response.status_code)
+                        raise MetaApiError(
+                            f"SAM Responses API returned HTTP {response.status_code} for {request_context}.",
+                            response.status_code,
+                        )
                     elif "text/event-stream" in response.headers.get("content-type", "").lower():
                         return _read_sse(response.iter_lines())
                     else:
                         return _read_json(response)
             except (httpx.TimeoutException, httpx.TransportError) as exc:
-                last_error = MetaApiError(f"SAM Responses API request failed: {type(exc).__name__}.")
+                last_error = MetaApiError(
+                    f"SAM Responses API request failed for {request_context}: {type(exc).__name__}."
+                )
                 log.warning("SAM Responses transport error (attempt %s/%s): %s", attempt + 1, attempts, type(exc).__name__)
             if attempt < attempts - 1:
                 time.sleep(min(2**attempt, 8))
