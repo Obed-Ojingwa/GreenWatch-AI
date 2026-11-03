@@ -1,7 +1,6 @@
 # Render blueprint for the GreenWatch API. The frontend deploys separately on Vercel (root: frontend/).
 # Secrets are marked `sync: false`: Render asks for them in the dashboard and they never live in git.
-# Python: the code was developed and tested on 3.13. If Render's default differs, set PYTHON_VERSION
-# to a 3.12+ version Render offers.
+# Python 3.13 is the version verified by this project; pin it because Render defaults to 3.14.
 services:
   - type: web
     name: greenwatch-api
@@ -12,6 +11,8 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.4
       - key: ENVIRONMENT
         value: production  # turns on fail-fast config checks (see app/core/config.py: production_problems)
       - key: DATABASE_URL  # Supabase Postgres connection string
