@@ -4,6 +4,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image, TiffImagePlugin
+from sqlalchemy.exc import OperationalError
 
 from app.core.config import get_settings
 from app.db.models import AnalysisRun, Investigation
@@ -170,7 +171,9 @@ def test_report_not_generated_for_failed_run(client):
 
 
 def test_health_and_cors(client):
-    assert client.get("/health").json()["status"] == "ok"
+    health = client.get("/health")
+    assert health.json()["status"] == "ok"
+    assert health.json()["database"] == "ready"
     r = client.options("/api/investigations", headers={
         "Origin": "http://localhost:5173", "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers": "x-demo-key,content-type"})
@@ -178,6 +181,47 @@ def test_health_and_cors(client):
     r = client.options("/api/investigations", headers={
         "Origin": "https://evil.example", "Access-Control-Request-Method": "POST"})
     assert "access-control-allow-origin" not in r.headers
+
+
+def test_health_reports_database_schema_failure_without_leaking_details(client, monkeypatch):
+    class BrokenConnection:
+        def __enter__(self):
+            raise OperationalError("SELECT 1", {}, Exception("credential-safe test failure"))
+
+        def __exit__(self, *_):
+            return False
+
+    monkeypatch.setattr("app.main.engine.connect", lambda: BrokenConnection())
+    response = client.get("/health")
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "unavailable",
+        "environment": get_settings().environment,
+        "database": "unavailable",
+        "hint": "Verify PostgreSQL connectivity and apply the database schema.",
+    }
+    assert "password" not in response.text
+
+
+def test_database_errors_return_cors_safe_sanitized_response(client):
+    from app.db.session import get_db
+
+    def broken_db():
+        raise OperationalError("SELECT 1", {}, Exception("credential-safe test failure"))
+        yield  # pragma: no cover
+
+    app.dependency_overrides[get_db] = broken_db
+    try:
+        response = client.get("/api/stats", headers={"Origin": "http://localhost:5173"})
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 503
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert response.json() == {
+        "error": "DatabaseUnavailable",
+        "detail": "The database is unavailable. Verify PostgreSQL connectivity and schema setup.",
+    }
 
 
 def _geotiff(epsg, scale=0.5, linear_units=None):

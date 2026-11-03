@@ -24,6 +24,10 @@ export default function Tasks() {
       <ErrorNote error={q.error ?? set.error} />
       {q.isLoading ? (
         <p className="text-ink-soft">Loading tasks…</p>
+      ) : q.isError ? (
+        <p role="status" className="rounded-ui border border-rule bg-panel p-6 text-center text-sm text-ink-soft">
+          Inspection tasks could not be loaded. Resolve the server connection before trying again.
+        </p>
       ) : (q.data ?? []).length === 0 ? (
         <div className="rounded-ui border border-dashed border-rule bg-panel p-8 text-center">
           <p className="font-medium">No inspection tasks yet</p>

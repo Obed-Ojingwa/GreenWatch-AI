@@ -16,6 +16,8 @@ export default function Dashboard() {
   const key = useAccessKey()
   const stats = useQuery({ queryKey: ['stats', !!key], queryFn: api.stats })
   const list = useQuery({ queryKey: ['investigations', !!key], queryFn: api.investigations })
+  const statValue = (value: number | undefined) =>
+    stats.isLoading ? 'Loading' : value ?? 'Unavailable'
 
   return (
     <div className="space-y-8">
@@ -34,26 +36,32 @@ export default function Dashboard() {
       <ErrorNote error={stats.error ?? list.error} />
 
       <section aria-label="Summary" className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
-        <Figure value={stats.data?.investigations ?? '–'} label="Investigations" />
-        <Figure value={stats.data?.awaiting_review ?? '–'} label="Awaiting review" />
-        <Figure value={stats.data?.completed ?? '–'} label="Completed" />
-        <Figure value={stats.data?.open_tasks ?? '–'} label="Open inspection tasks" />
+        <Figure value={statValue(stats.data?.investigations)} label="Investigations" />
+        <Figure value={statValue(stats.data?.awaiting_review)} label="Awaiting review" />
+        <Figure value={statValue(stats.data?.completed)} label="Completed" />
+        <Figure value={statValue(stats.data?.open_tasks)} label="Open inspection tasks" />
       </section>
 
       {!key && (
         <p className="rounded-ui border border-rule bg-panel px-3 py-2 text-sm text-ink-soft">
-          You are viewing the public sample. Enter the access key to create investigations and run analyses.
+          Public investigations are read-only. Enter the project access key to create investigations and run analyses.
         </p>
       )}
 
       <section aria-label="Investigation list">
         {list.isLoading ? (
           <p className="text-ink-soft">Loading investigations…</p>
+        ) : list.isError ? (
+          <p role="status" className="rounded-ui border border-rule bg-panel p-6 text-center text-sm text-ink-soft">
+            Investigations could not be loaded. Resolve the server connection before trying again.
+          </p>
         ) : (list.data ?? []).length === 0 ? (
           <div className="rounded-ui border border-dashed border-rule bg-panel p-8 text-center">
-            <p className="font-medium">{key ? 'No investigations yet' : 'No public sample is published yet'}</p>
+            <p className="font-medium">{key ? 'No investigations yet' : 'No public investigations are available'}</p>
             <p className="mt-1 text-sm text-ink-soft">
-              {key ? 'Create one with an earlier and a newer image of the same site.' : 'Enter the access key to start your own investigation.'}
+              {key
+                ? 'Create one with earlier and newer images of the same site.'
+                : 'A public, read-only investigation will appear here once one has been published.'}
             </p>
           </div>
         ) : (

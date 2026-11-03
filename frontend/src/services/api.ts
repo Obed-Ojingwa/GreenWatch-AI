@@ -3,7 +3,8 @@ import type {
   AgentRun, Category, Investigation, InvestigationInput, Report, Role, Stats, Task,
 } from '../types/api'
 
-const BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '').replace(/\/$/, '')
+const configuredBase = import.meta.env.VITE_API_BASE_URL?.trim()
+const BASE = (configuredBase || (import.meta.env.DEV ? 'http://localhost:8000' : '')).replace(/\/$/, '')
 const KEY_STORAGE = 'greenwatch.accessKey'
 
 // The access key lives in sessionStorage when available (cleared when the tab closes) and is never
@@ -68,6 +69,9 @@ function messageFrom(body: unknown, fallback: string): string {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (!BASE) {
+    throw new ApiError(0, 'The backend URL is not configured. Set VITE_API_BASE_URL in the frontend deployment environment.')
+  }
   const headers: Record<string, string> = {}
   const key = getAccessKey()
   if (key) headers['X-Demo-Key'] = key

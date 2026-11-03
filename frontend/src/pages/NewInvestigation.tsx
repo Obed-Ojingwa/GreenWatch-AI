@@ -48,7 +48,7 @@ export default function NewInvestigation() {
     return (
       <div className="max-w-xl space-y-4">
         <h1 className="text-2xl font-bold">New investigation</h1>
-        <Notice>Creating an investigation needs the access key. Without it you can still open the public sample.</Notice>
+        <Notice>Creating an investigation needs the project access key. Published investigations remain available without it.</Notice>
         <AccessKeyButton />
       </div>
     )
@@ -76,7 +76,8 @@ export default function NewInvestigation() {
         <div>
           <label htmlFor="location" className="block text-sm font-medium">Location name</label>
           <input id="location" value={location} onChange={(e) => setLocation(e.target.value)} required maxLength={200}
-            placeholder="Neighbourhood or site name" className="mt-1 w-full rounded-ui border border-rule bg-white px-3 py-2" />
+            className="mt-1 w-full rounded-ui border border-rule bg-white px-3 py-2" />
+          <p className="mt-1 text-xs text-ink-soft">Use a recognizable site or neighbourhood name.</p>
         </div>
         <div>
           <label htmlFor="lat" className="block text-sm font-medium">Latitude (optional)</label>

@@ -1,16 +1,21 @@
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.routes import files, investigations, runs
 from app.core.config import get_settings, production_problems
 from app.core.errors import DomainError
 from app.db.session import SessionLocal, engine, init_dev_db
 from app.services.agent import mark_stale_runs
+
+log = logging.getLogger("greenwatch.health")
 
 
 @asynccontextmanager
@@ -47,9 +52,34 @@ def create_app() -> FastAPI:
     async def domain_error(_: Request, exc: DomainError):
         return JSONResponse(status_code=exc.status_code, content={"error": type(exc).__name__, "detail": exc.detail})
 
+    @app.exception_handler(SQLAlchemyError)
+    async def database_error(_: Request, exc: SQLAlchemyError):
+        log.error("database request failed (%s)", type(exc).__name__)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": "DatabaseUnavailable",
+                "detail": "The database is unavailable. Verify PostgreSQL connectivity and schema setup.",
+            },
+        )
+
     @app.get("/health")
     def health():
-        return {"status": "ok", "environment": s.environment}
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1 FROM investigations LIMIT 0"))
+        except SQLAlchemyError as exc:
+            log.error("database readiness check failed (%s)", type(exc).__name__)
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unavailable",
+                    "environment": s.environment,
+                    "database": "unavailable",
+                    "hint": "Verify PostgreSQL connectivity and apply the database schema.",
+                },
+            )
+        return {"status": "ok", "environment": s.environment, "database": "ready"}
 
     app.include_router(investigations.router)
     app.include_router(runs.router)

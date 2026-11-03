@@ -46,8 +46,9 @@ export default function ImageField({
         <div>
           <label htmlFor={`source-${role}`} className="block text-sm font-medium">Image source</label>
           <input id={`source-${role}`} value={value.source} onChange={(e) => onChange({ ...value, source: e.target.value })}
-            placeholder="Drone survey, open aerial dataset…" maxLength={120}
+            maxLength={120}
             className="mt-1 w-full rounded-ui border border-rule bg-white px-3 py-2" />
+          <p className="mt-1 text-xs text-ink-soft">Record the dataset, survey, or provider.</p>
         </div>
       </div>
     </fieldset>

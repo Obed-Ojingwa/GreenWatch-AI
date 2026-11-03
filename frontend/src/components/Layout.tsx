@@ -53,8 +53,8 @@ export function AccessKeyButton() {
         >
           <h2 className="text-lg font-semibold">Access key</h2>
           <p className="mt-2 text-sm text-ink-soft">
-            Creating investigations and running analyses needs the access key from the project README. Without it you can
-            still open the public sample.
+            Creating investigations and running analyses needs the project access key. Published read-only investigations
+            remain available without a key.
           </p>
           <label className="mt-4 block text-sm font-medium" htmlFor="access-key">
             Key
