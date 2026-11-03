@@ -1,6 +1,8 @@
 import re
 from pathlib import Path
 
+import pytest
+
 from app.core.config import Settings, production_problems
 from app.db.models import Base
 from app.db.session import normalize_database_url
@@ -58,6 +60,11 @@ def test_database_url_is_normalised_for_psycopg3():
     assert normalize_database_url("postgresql://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
     assert normalize_database_url("postgresql+psycopg://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
     assert normalize_database_url("sqlite:///x.db") == "sqlite:///x.db"
+
+
+def test_database_url_rejects_supabase_https_project_url():
+    with pytest.raises(ValueError, match="DATABASE_URL must be a PostgreSQL connection string"):
+        normalize_database_url("https://example.supabase.co")
 
 
 def test_production_refuses_unsafe_config():

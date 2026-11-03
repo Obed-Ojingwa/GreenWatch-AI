@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from urllib.parse import urlsplit
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -13,6 +14,11 @@ class Base(DeclarativeBase):
 def normalize_database_url(url: str) -> str:
     """Supabase/Render hand out `postgres://` or `postgresql://`; SQLAlchemy would then pick the
     psycopg2 driver, which is not installed. We use psycopg 3."""
+    if urlsplit(url).scheme.lower() == "https":
+        raise ValueError(
+            "DATABASE_URL must be a PostgreSQL connection string, not the Supabase HTTPS project URL. "
+            "Use the database connection string for DATABASE_URL and keep the HTTPS project URL in SUPABASE_URL."
+        )
     for prefix in ("postgres://", "postgresql://"):
         if url.startswith(prefix):
             return "postgresql+psycopg://" + url[len(prefix):]
