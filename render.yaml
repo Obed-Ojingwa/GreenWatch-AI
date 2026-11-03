@@ -27,7 +27,7 @@ services:
         value: greenwatch
       - key: DEMO_ACCESS_KEY  # >= 16 random characters; judges get it in the submission notes
         sync: false
-      - key: FRONTEND_ORIGIN  # your Vercel URL, e.g. https://greenwatch.vercel.app
+      - key: FRONTEND_ORIGIN  # comma-separated; e.g. Vercel and Render URLs
         sync: false
       # Meta Model API: fill from docs/meta-api-notes.md after Gate 0
       - key: META_API_KEY

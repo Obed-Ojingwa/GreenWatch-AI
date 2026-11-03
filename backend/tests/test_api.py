@@ -181,6 +181,15 @@ def test_health_and_cors(client):
     r = client.options("/api/investigations", headers={
         "Origin": "https://evil.example", "Access-Control-Request-Method": "POST"})
     assert "access-control-allow-origin" not in r.headers
+    for origin in (
+        "https://greenwatch-ai-theta.vercel.app",
+        "https://greenwatch-ai-670g.onrender.com",
+    ):
+        response = client.options("/api/investigations", headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "GET",
+        })
+        assert response.headers.get("access-control-allow-origin") == origin
 
 
 def test_health_reports_database_schema_failure_without_leaking_details(client, monkeypatch):

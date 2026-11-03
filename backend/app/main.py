@@ -17,6 +17,17 @@ from app.services.agent import mark_stale_runs
 
 log = logging.getLogger("greenwatch.health")
 
+DEPLOYED_ORIGINS = (
+    "https://greenwatch-ai-theta.vercel.app",
+    "https://greenwatch-ai-670g.onrender.com",
+)
+
+
+def cors_origins(configured: str) -> list[str]:
+    """Include the deployed app origins and any additional Render-configured origins."""
+    origins = (*DEPLOYED_ORIGINS, *(origin.strip().rstrip("/") for origin in configured.split(",")))
+    return list(dict.fromkeys(origin for origin in origins if origin))
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -43,7 +54,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[o.strip() for o in s.frontend_origin.split(",") if o.strip()],
+        allow_origins=cors_origins(s.frontend_origin),
         allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
         allow_headers=["Content-Type", "X-Demo-Key"],
     )

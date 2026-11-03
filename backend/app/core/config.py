@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     environment: str = "development"  # "production" turns on fail-fast checks (see production_problems)
 
     # --- database / storage ---
-    database_url: str = "sqlite:///./greenwatch_dev.db"
+    database_url: str = ""
     auto_create_tables: bool = False
-    storage_backend: str = "local"  # local | supabase
+    storage_backend: str = "supabase"  # local | supabase
     local_storage_dir: str = "./storage_data"
     supabase_url: str = ""
     supabase_service_key: str = ""  # backend only; never ship to the browser
@@ -25,7 +25,9 @@ class Settings(BaseSettings):
 
     # --- demo mode ---
     demo_access_key: str = ""
-    frontend_origin: str = "http://localhost:5173"  # comma-separated allowed origins
+    frontend_origin: str = (
+        "https://greenwatch-ai-theta.vercel.app,https://greenwatch-ai-670g.onrender.com"
+    )  # comma-separated allowed origins; Render's FRONTEND_ORIGIN overrides this default
 
     # --- Meta Model API (VERIFY every value against the Meta docs; see docs/meta-api-notes.md) ---
     meta_api_key: str = ""

@@ -55,6 +55,21 @@ def test_default_agent_call_budget_covers_three_categories_with_one_retry():
     assert full_run_calls <= settings.max_tool_calls_per_run
 
 
+def test_render_environment_variables_override_settings_defaults(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://db.example.invalid/greenwatch")
+    monkeypatch.setenv(
+        "FRONTEND_ORIGIN",
+        "https://greenwatch-ai-theta.vercel.app,https://greenwatch-ai-670g.onrender.com",
+    )
+    settings = Settings(_env_file=None)
+    assert settings.environment == "production"
+    assert settings.database_url == "postgresql://db.example.invalid/greenwatch"
+    assert settings.frontend_origin == (
+        "https://greenwatch-ai-theta.vercel.app,https://greenwatch-ai-670g.onrender.com"
+    )
+
+
 def test_database_url_is_normalised_for_psycopg3():
     assert normalize_database_url("postgres://u:p@h:5432/db") == "postgresql+psycopg://u:p@h:5432/db"
     assert normalize_database_url("postgresql://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
