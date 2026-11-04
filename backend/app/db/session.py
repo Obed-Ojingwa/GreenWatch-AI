@@ -53,3 +53,4 @@ def init_dev_db() -> None:
     from app.db import models  # noqa: F401
 
     Base.metadata.create_all(engine)
+
