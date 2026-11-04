@@ -24,3 +24,11 @@ def require_demo_key(x_demo_key: str | None = Header(default=None)) -> None:
 def has_demo_key(x_demo_key: str | None = Header(default=None)) -> bool:
     """Non-raising variant for read routes that expose more data to key holders."""
     return key_is_valid(x_demo_key)
+
+
+def require_meta_diagnostic_key(x_meta_diagnostic_key: str | None = Header(default=None)) -> None:
+    expected = get_settings().meta_diagnostic_key
+    if not expected or not x_meta_diagnostic_key or not hmac.compare_digest(
+        x_meta_diagnostic_key.encode(), expected.encode()
+    ):
+        raise Unauthorized("A valid Meta diagnostic key is required for this action.")

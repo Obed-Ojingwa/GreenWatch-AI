@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 
     # --- Meta Model API (VERIFY every value against the Meta docs; see docs/meta-api-notes.md) ---
     meta_api_key: str = ""
+    meta_diagnostic_key: str = ""
     meta_base_url: str = ""
     meta_auth_header: str = "Authorization"
     meta_auth_scheme: str = "Bearer"  # empty string = send the raw key

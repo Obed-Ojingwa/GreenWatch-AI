@@ -52,6 +52,12 @@ class MetaApiError(DomainError):
 
     status_code = 502
 
-    def __init__(self, detail: str = "", status: int | None = None):
+    def __init__(
+        self,
+        detail: str = "",
+        status: int | None = None,
+        provider_code: str | None = None,
+    ):
         super().__init__(detail)
         self.status = status
+        self.provider_code = provider_code

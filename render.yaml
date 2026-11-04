@@ -32,6 +32,8 @@ services:
       # Meta Model API: fill from docs/meta-api-notes.md after Gate 0
       - key: META_API_KEY
         sync: false
+      - key: META_DIAGNOSTIC_KEY  # optional, separate key for the protected runtime probe
+        sync: false
       - key: META_BASE_URL
         sync: false
       - key: META_AUTH_HEADER

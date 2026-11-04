@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from slowapi import Limiter
@@ -9,8 +10,8 @@ from sqlalchemy.orm import Session
 from app import schemas as S
 from app.api.deps import load_investigation, load_run, report_out, run_out, storage_dep, task_out
 from app.core.config import get_settings
-from app.core.errors import Conflict, DomainError, ValidationFailed
-from app.core.security import has_demo_key, require_demo_key
+from app.core.errors import Conflict, DomainError, MetaApiError, ValidationFailed
+from app.core.security import has_demo_key, require_demo_key, require_meta_diagnostic_key
 from app.db.models import AnalysisRun, InspectionTask, Investigation, Report
 from app.db.session import SessionLocal, get_db
 from app.services import report as report_service
@@ -28,6 +29,51 @@ def run_in_background(run_id: uuid.UUID) -> None:
         execute_run(db, run_id, get_meta_client(), get_storage())
     finally:
         db.close()
+
+
+@router.post(
+    "/meta/diagnostics",
+    dependencies=[Depends(require_meta_diagnostic_key)],
+)
+@limiter.limit("2/hour")
+def diagnose_meta_configuration(request: Request):
+    settings = get_settings()
+    base = urlsplit(settings.meta_base_url)
+    path = settings.meta_chat_path.split("?", 1)[0].strip("/")
+    request_path = "/".join(part for part in (base.path.strip("/"), path) if part)
+    details = {
+        "api_host": base.hostname,
+        "endpoint_path": f"/{request_path}" if request_path else "",
+        "model": settings.agent_model,
+    }
+    if not settings.meta_api_key or not base.hostname or not settings.agent_model or not path:
+        return {
+            "ok": False,
+            "result": "missing_configuration",
+            "api_key_configured": bool(settings.meta_api_key),
+            **details,
+        }
+
+    try:
+        response = get_meta_client().chat(
+            [{"role": "user", "content": "Reply with exactly the word OK."}],
+            model=settings.agent_model,
+        )
+    except MetaApiError as exc:
+        return {
+            "ok": False,
+            "result": "provider_error" if exc.status else "client_error",
+            "provider_status": exc.status,
+            "provider_error_code": exc.provider_code,
+            **details,
+        }
+
+    return {
+        "ok": bool(response.content and response.content.strip()),
+        "result": "reply_received" if response.content and response.content.strip() else "empty_reply",
+        "provider_status": 200,
+        **details,
+    }
 
 
 @router.post("/investigations/{inv_id}/agent-runs", response_model=S.AgentRunOut, status_code=202,

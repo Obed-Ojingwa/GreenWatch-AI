@@ -121,6 +121,20 @@ def _b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
 
 
+def _provider_error_code(response: httpx.Response) -> str | None:
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    error = payload.get("error")
+    if not isinstance(error, dict):
+        return None
+    code = error.get("code") or error.get("type")
+    return code if isinstance(code, str) else None
+
+
 # ---- HTTP client -------------------------------------------------------------------------------------
 
 class HttpMetaClient:
@@ -165,11 +179,13 @@ class HttpMetaClient:
                         last = MetaApiError(
                             f"Meta API {resp.status_code} for {request_context}: {resp.text[:300]}",
                             resp.status_code,
+                            _provider_error_code(resp),
                         )
                     elif resp.status_code >= 400:
                         raise MetaApiError(
                             f"Meta API {resp.status_code} for {request_context}: {resp.text[:500]}",
                             resp.status_code,
+                            _provider_error_code(resp),
                         )
                     else:
                         try:

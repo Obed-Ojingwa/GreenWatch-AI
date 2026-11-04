@@ -137,6 +137,32 @@ def test_chat_error_includes_endpoint_and_model_without_request_payload(monkeypa
             HttpMetaClient().chat([{"role": "user", "content": "hi"}], model="muse-spark-1.3")
 
 
+def test_provider_error_code_is_available_without_echoing_api_key(monkeypatch):
+    real_client = mc.httpx.Client
+    transport = mc.httpx.MockTransport(
+        lambda _: mc.httpx.Response(
+            404,
+            json={"error": {"code": "model_not_found", "message": "requested model not found"}},
+        )
+    )
+    monkeypatch.setattr(
+        mc.httpx,
+        "Client",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
+    settings = get_settings()
+    monkeypatch.setattr(settings, "meta_base_url", "https://api.meta.ai/v1")
+    monkeypatch.setattr(settings, "meta_api_key", "private-test-key")
+    monkeypatch.setattr(settings, "meta_max_retries", 1)
+
+    with pytest.raises(MetaApiError) as error:
+        HttpMetaClient(settings).chat([{"role": "user", "content": "hi"}], model="muse-spark-1.3")
+
+    assert error.value.status == 404
+    assert error.value.provider_code == "model_not_found"
+    assert "private-test-key" not in error.value.detail
+
+
 # ---- the whole agent over real HTTP --------------------------------------------------------------
 
 @pytest.mark.parametrize("fmt", ["png", "rle_str"])

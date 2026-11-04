@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """Find which Meta Model API endpoint + model id works for YOUR key, and what the app needs from it.
 
-Run (PowerShell), from the backend folder so it can read backend\\.env:
-    python ..\\check_meta.py
-or set the key first:  $env:META_API_KEY="..."  ;  python check_meta.py
+Run (PowerShell) from the backend folder:
+    python check_meta.py
 
-Needs only the Python standard library. The key is never printed or saved. Costs a few cents of credit.
+Needs only the Python standard library. It prompts for the key and never reads .env, prints, or saves
+the key. It may make several billable requests.
 """
 import getpass
 import json
 import os
-import pathlib
 import urllib.error
 import urllib.request
 
@@ -23,14 +22,7 @@ TOOL_PARAMS = {"type": "object", "properties": {}, "required": []}
 
 
 def get_key():
-    key = os.environ.get("META_API_KEY") or os.environ.get("MODEL_API_KEY")
-    if not key:
-        for p in (pathlib.Path(".env"), pathlib.Path("backend/.env"), pathlib.Path("../backend/.env")):
-            if p.exists():
-                for line in p.read_text(encoding="utf-8", errors="ignore").splitlines():
-                    if line.startswith("META_API_KEY="):
-                        key = line.split("=", 1)[1].strip().strip("'\"")
-    return key or getpass.getpass("Meta API key (hidden, not saved): ").strip()
+    return getpass.getpass("Meta Model API key (hidden, not saved): ").strip()
 
 
 def call(key, method, path, body=None):

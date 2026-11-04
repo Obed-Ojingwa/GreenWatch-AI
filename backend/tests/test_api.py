@@ -7,10 +7,11 @@ from PIL import Image, TiffImagePlugin
 from sqlalchemy.exc import OperationalError
 
 from app.core.config import get_settings
+from app.core.errors import MetaApiError
 from app.db.models import AnalysisRun, Investigation
 from app.main import app
 from app.services.georef import extract_georef
-from app.services.meta_client import set_meta_client
+from app.services.meta_client import ChatResponse, set_meta_client
 from tests.helpers import FakeMeta, make_pair
 
 KEY = {"X-Demo-Key": "testkey"}
@@ -54,6 +55,69 @@ def test_j_write_routes_need_key(client):
     assert client.post(f"/api/agent-runs/{fake}/report").status_code == 401
     assert client.post(f"/api/investigations/{fake}/images", data={"role": "earlier"},
                        files={"file": ("a.png", b"x", "image/png")}).status_code == 401
+
+
+def test_meta_diagnostic_requires_separate_key_and_reports_effective_config(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "meta_diagnostic_key", "diagnostic-key")
+    monkeypatch.setattr(settings, "meta_api_key", "provider-key")
+    monkeypatch.setattr(settings, "meta_base_url", "https://api.meta.ai/v1")
+    monkeypatch.setattr(settings, "meta_chat_path", "chat/completions")
+    monkeypatch.setattr(settings, "agent_model", "muse-spark-1.3")
+
+    class PassingMeta:
+        def chat(self, messages, *, model, tools=None, images=None, json_schema=None):
+            assert messages == [{"role": "user", "content": "Reply with exactly the word OK."}]
+            assert model == "muse-spark-1.3"
+            return ChatResponse(content="OK")
+
+    set_meta_client(PassingMeta())
+    assert client.post("/api/meta/diagnostics").status_code == 401
+    response = client.post(
+        "/api/meta/diagnostics",
+        headers={"X-Meta-Diagnostic-Key": "diagnostic-key"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "result": "reply_received",
+        "provider_status": 200,
+        "api_host": "api.meta.ai",
+        "endpoint_path": "/v1/chat/completions",
+        "model": "muse-spark-1.3",
+    }
+    assert "provider-key" not in response.text
+
+
+def test_meta_diagnostic_returns_only_sanitized_provider_error(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "meta_diagnostic_key", "diagnostic-key")
+    monkeypatch.setattr(settings, "meta_api_key", "provider-key")
+    monkeypatch.setattr(settings, "meta_base_url", "https://api.meta.ai/v1")
+    monkeypatch.setattr(settings, "meta_chat_path", "chat/completions")
+    monkeypatch.setattr(settings, "agent_model", "muse-spark-1.3")
+
+    class FailingMeta:
+        def chat(self, messages, *, model, tools=None, images=None, json_schema=None):
+            raise MetaApiError("must not be returned", 404, "model_not_found")
+
+    set_meta_client(FailingMeta())
+    response = client.post(
+        "/api/meta/diagnostics",
+        headers={"X-Meta-Diagnostic-Key": "diagnostic-key"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": False,
+        "result": "provider_error",
+        "provider_status": 404,
+        "provider_error_code": "model_not_found",
+        "api_host": "api.meta.ai",
+        "endpoint_path": "/v1/chat/completions",
+        "model": "muse-spark-1.3",
+    }
+    assert "provider-key" not in response.text
+    assert "must not be returned" not in response.text
 
 
 def test_sample_public_private_hidden(client, db):
