@@ -215,12 +215,10 @@ def build_pdf(
         story.append(Paragraph("&bull; " + escape(it.get("recommended_action", "")), st["p"]))
 
     story.append(Paragraph("G. Method and limitations", st["h"]))
-    ai_provider = (run.model_config_json or {}).get("ai_provider", "meta")
-    ai_name = "Gemini" if ai_provider == "gemini" else "Muse Spark"
     story.append(Paragraph(escape(
         f"Alignment: {v.get('method')} (aligned={v.get('aligned')}, overlap={v.get('overlap_ratio')}). "
         "Segmentation by SAM 3.1; quality screened with AI-assisted review (not a guarantee of accuracy); "
-        f"measurements computed by backend code; narrative text by {ai_name} validated against stored results."), st["p"]))
+        "measurements computed by backend code; narrative text by Muse Spark validated against stored results."), st["p"]))
     for w in (v.get("warnings") or []) + (v.get("reasons") or []):
         story.append(Paragraph("&bull; " + escape(str(w)), st["small"]))
 

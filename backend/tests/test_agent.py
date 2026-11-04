@@ -38,7 +38,7 @@ def test_happy_path_completed_with_full_report(db, storage):
     assert m["new_pixels"] > m["old_pixels"] > 0
     assert m["metric_type"] == "pixel_count" and not m["real_world_area_available"]
     assert "area_m2" not in m  # test G: no georeference -> no m2
-    assert run.interpretation["items"][0]["source"] == "gemini"
+    assert run.interpretation["items"][0]["source"] == "muse_spark"
     rep = db.query(Report).filter_by(run_id=run.id).one()
     assert rep.kind == "full"
     assert storage.download_bytes(rep.storage_path)[:4] == b"%PDF"
@@ -98,13 +98,10 @@ def test_e_unrelated_pair_stops_with_diagnostic_report(db, storage):
     assert [t for t, _ in _steps(db, run)] == ["get_investigation", "validate_image_pair"]
 
 
-def test_f_meta_failure_marks_failed_and_no_report(db, storage, caplog):
+def test_f_meta_failure_marks_failed_and_no_report(db, storage):
     meta = FakeMeta(fail_segment=True)
     inv, run = _go(db, storage, meta)
     assert run.status == "failed" and "503" in run.error
-    assert f"run_id={run.id}" in caplog.text
-    assert "provider_status=503" in caplog.text
-    assert "error_type=MetaApiError" in caplog.text
     assert db.query(Report).filter_by(run_id=run.id).count() == 0
     assert inv.status == "failed"
     assert _steps(db, run)[-1] == ("segment_image", "error")
@@ -114,7 +111,7 @@ def test_h_bad_evidence_id_rejected_then_corrected(db, storage):
     _, run = _go(db, storage, FakeMeta(interp_mode="bad_evidence"))
     subs = [(t, s) for t, s in _steps(db, run) if t == "submit_interpretation"]
     assert subs == [("submit_interpretation", "error"), ("submit_interpretation", "ok")]
-    assert run.interpretation["items"][0]["source"] == "gemini"
+    assert run.interpretation["items"][0]["source"] == "muse_spark"
 
 
 def test_illegality_wording_rejected(db, storage):

@@ -1,19 +1,18 @@
-"""AI investigation agent.
+"""Muse Spark investigation agent.
 
-The configured chat model chooses which tool to call next; the backend executes real functions, enforces
+Muse Spark chooses which tool to call next; the backend executes real functions, enforces
 prerequisites and limits in code, logs every call to `agent_steps`, and validates the final
 interpretation. Models never produce a measurement: numbers come from comparison.py and are
 rendered by the backend.
 
 Failure semantics:
-  failed           system error (provider unavailable, undecodable file, ...). No report.
+  failed           system error (Meta API down, undecodable file, ...). No report.
   review_required  ran, but the pair/masks are not trustworthy (or the pair was rejected).
   completed        ran and passed every check.
 """
 from __future__ import annotations
 
 import json
-import logging
 import re
 import time
 import uuid
@@ -30,14 +29,12 @@ from app.core.errors import DomainError, MetaApiError
 from app.db.models import (
     AgentStep, AnalysisRun, Image, InspectionTask, Investigation, SegmentationResult,
 )
+from app.services import quality, report as report_service, segmentation, validation
 from app.services.comparison import (
     Georef, area_m2, compare_masks, diff_overlay, m2_supported,
 )
-from app.services import quality, report as report_service, segmentation, validation
 from app.services.meta_client import MetaClient
 from app.services.storage import Storage
-
-log = logging.getLogger("greenwatch.agent")
 
 ROLES = ("earlier", "newer")
 FORBIDDEN_TERMS = (
@@ -460,7 +457,7 @@ def t_submit_interpretation(ctx: RunContext, a: InterpretationArgs) -> dict:
             raise ToolError(err)
     item = a.model_dump()
     item["requires_human_review"] = True  # always true: imagery is not proof
-    item["source"] = "gemini" if ctx.settings.ai_provider.strip().lower() == "gemini" else "muse_spark"
+    item["source"] = "muse_spark"
     ctx.interpretations[a.category] = item
     return {"accepted": True, "category": a.category}
 
@@ -703,8 +700,6 @@ def execute_run(db: Session, run_id: uuid.UUID, meta: MetaClient, storage: Stora
     run.status, run.started_at = "processing", _now()
     inv.status = "processing"
     run.model_config_json = {
-        "ai_provider": s.ai_provider,
-        "segmentation_provider": "meta",
         "sam_model": s.sam_model, "agent_model": s.agent_model,
         "vision_qc_model": s.vision_qc_model or s.agent_model, "qc_bounds": s.qc_bounds,
         "max_qc_retries": s.max_qc_retries, "max_tool_calls": s.max_tool_calls_per_run,
@@ -738,16 +733,6 @@ def execute_run(db: Session, run_id: uuid.UUID, meta: MetaClient, storage: Stora
         run = db.get(AnalysisRun, run_id)
         run.status = "failed"
         run.error = (e.detail if isinstance(e, DomainError) else f"{type(e).__name__}: {e}")[:1000]
-        if isinstance(e, MetaApiError):
-            log.error(
-                "analysis run failed run_id=%s provider_status=%s provider_code=%s error_type=%s",
-                run_id, e.status, e.provider_code, type(e).__name__,
-            )
-        else:
-            log.error(
-                "analysis run failed run_id=%s error_type=%s",
-                run_id, type(e).__name__,
-            )
     run.completed_at = _now()
     inv = db.get(Investigation, run.investigation_id)
     inv.status = run.status

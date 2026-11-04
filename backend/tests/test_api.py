@@ -59,7 +59,6 @@ def test_j_write_routes_need_key(client):
 
 def test_meta_diagnostic_requires_separate_key_and_reports_effective_config(client, monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "ai_provider", "meta")
     monkeypatch.setattr(settings, "meta_diagnostic_key", "diagnostic-key")
     monkeypatch.setattr(settings, "meta_api_key", "provider-key")
     monkeypatch.setattr(settings, "meta_base_url", "https://api.meta.ai/v1")
@@ -91,7 +90,6 @@ def test_meta_diagnostic_requires_separate_key_and_reports_effective_config(clie
         "catalog_error_code": None,
         "requested_model_listed": True,
         "available_relevant_models": ["muse-spark-1.3", "sam-3.1"],
-        "provider": "meta",
         "api_host": "api.meta.ai",
         "endpoint_path": "/v1/chat/completions",
         "model": "muse-spark-1.3",
@@ -101,7 +99,6 @@ def test_meta_diagnostic_requires_separate_key_and_reports_effective_config(clie
 
 def test_meta_diagnostic_returns_only_sanitized_provider_error(client, monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "ai_provider", "meta")
     monkeypatch.setattr(settings, "meta_diagnostic_key", "diagnostic-key")
     monkeypatch.setattr(settings, "meta_api_key", "provider-key")
     monkeypatch.setattr(settings, "meta_base_url", "https://api.meta.ai/v1")
@@ -131,7 +128,6 @@ def test_meta_diagnostic_returns_only_sanitized_provider_error(client, monkeypat
         "catalog_error_code": None,
         "requested_model_listed": True,
         "available_relevant_models": ["muse-spark-1.3", "sam-3.1"],
-        "provider": "meta",
         "api_host": "api.meta.ai",
         "endpoint_path": "/v1/chat/completions",
         "model": "muse-spark-1.3",
@@ -142,7 +138,6 @@ def test_meta_diagnostic_returns_only_sanitized_provider_error(client, monkeypat
 
 def test_meta_diagnostic_identifies_model_missing_from_key_catalog(client, monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "ai_provider", "meta")
     monkeypatch.setattr(settings, "meta_diagnostic_key", "diagnostic-key")
     monkeypatch.setattr(settings, "meta_api_key", "provider-key")
     monkeypatch.setattr(settings, "meta_base_url", "https://api.meta.ai/v1")
@@ -167,71 +162,6 @@ def test_meta_diagnostic_identifies_model_missing_from_key_catalog(client, monke
     assert result["catalog_status"] == 200
     assert result["requested_model_listed"] is False
     assert result["available_relevant_models"] == ["sam-3.1", "muse-wonder-1.0"]
-
-
-def test_ai_diagnostic_checks_gemini_without_exposing_credentials_or_assuming_catalog(client, monkeypatch):
-    settings = get_settings()
-    monkeypatch.setattr(settings, "ai_provider", "gemini")
-    monkeypatch.setattr(settings, "gemini_api_key", "gemini-provider-key")
-    monkeypatch.setattr(
-        settings, "gemini_base_url", "https://generativelanguage.googleapis.com/v1beta/openai"
-    )
-    monkeypatch.setattr(settings, "meta_diagnostic_key", "diagnostic-key")
-    monkeypatch.setattr(settings, "agent_model", "gemini-test")
-
-    class PassingGemini:
-        def list_models(self):
-            return ModelCatalog(None, error_code="catalog_not_supported")
-
-        def chat(self, messages, *, model, tools=None, images=None, json_schema=None):
-            assert model == "gemini-test"
-            return ChatResponse(content="OK")
-
-    set_meta_client(PassingGemini())
-    response = client.post(
-        "/api/ai/diagnostics",
-        headers={"X-Meta-Diagnostic-Key": "diagnostic-key"},
-    )
-    assert response.status_code == 200
-    result = response.json()
-    assert result["ok"] is True
-    assert result["provider"] == "gemini"
-    assert result["api_host"] == "generativelanguage.googleapis.com"
-    assert result["endpoint_path"] == "/v1beta/openai/chat/completions"
-    assert result["catalog_error_code"] == "catalog_not_supported"
-    assert result["requested_model_listed"] is None
-    assert "gemini-provider-key" not in response.text
-
-
-def test_ai_diagnostic_reports_gemini_provider_code_when_chat_fails(client, monkeypatch):
-    settings = get_settings()
-    monkeypatch.setattr(settings, "ai_provider", "gemini")
-    monkeypatch.setattr(settings, "gemini_api_key", "gemini-provider-key")
-    monkeypatch.setattr(
-        settings, "gemini_base_url", "https://generativelanguage.googleapis.com/v1beta/openai"
-    )
-    monkeypatch.setattr(settings, "meta_diagnostic_key", "diagnostic-key")
-    monkeypatch.setattr(settings, "agent_model", "gemini-test")
-
-    class FailingGemini:
-        def list_models(self):
-            return ModelCatalog(None, error_code="catalog_not_supported")
-
-        def chat(self, messages, *, model, tools=None, images=None, json_schema=None):
-            raise MetaApiError("safe provider error", 503, "UNAVAILABLE")
-
-    set_meta_client(FailingGemini())
-    response = client.post(
-        "/api/ai/diagnostics",
-        headers={"X-Meta-Diagnostic-Key": "diagnostic-key"},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["diagnosis"] == "gemini_chat_request_failed"
-    assert response.json()["provider_status"] == 503
-    assert response.json()["provider_error_code"] == "UNAVAILABLE"
-    assert "gemini-provider-key" not in response.text
-    assert "safe provider error" not in response.text
 
 
 def test_sample_public_private_hidden(client, db):

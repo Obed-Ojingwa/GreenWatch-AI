@@ -41,7 +41,7 @@ create table analysis_runs (
   validation jsonb,                           -- alignment/overlap/pair checks
   metrics jsonb,                              -- per-category ComparisonResult
   findings jsonb,                             -- list of findings, each with evidence_refs + limitations
-  interpretation jsonb,                           -- validated structured configured-provider output
+  interpretation jsonb,                       -- validated structured Muse Spark output
   approval boolean not null default false,    -- user approved inspection-task creation
   error text,
   started_at timestamptz,
