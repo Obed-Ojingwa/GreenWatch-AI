@@ -71,7 +71,9 @@ def diagnose_ai_configuration(request: Request):
             model=settings.agent_model,
         )
     except MetaApiError as exc:
-        if catalog.status == 200 and settings.agent_model not in catalog.model_ids:
+        if is_gemini and catalog.error_code == "catalog_not_supported":
+            diagnosis = "gemini_chat_request_failed"
+        elif catalog.status == 200 and settings.agent_model not in catalog.model_ids:
             diagnosis = "model_not_listed_for_this_api_key"
         elif catalog.status == 200:
             diagnosis = "model_listed_but_chat_request_rejected"

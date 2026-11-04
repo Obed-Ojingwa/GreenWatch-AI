@@ -98,10 +98,13 @@ def test_e_unrelated_pair_stops_with_diagnostic_report(db, storage):
     assert [t for t, _ in _steps(db, run)] == ["get_investigation", "validate_image_pair"]
 
 
-def test_f_meta_failure_marks_failed_and_no_report(db, storage):
+def test_f_meta_failure_marks_failed_and_no_report(db, storage, caplog):
     meta = FakeMeta(fail_segment=True)
     inv, run = _go(db, storage, meta)
     assert run.status == "failed" and "503" in run.error
+    assert f"run_id={run.id}" in caplog.text
+    assert "provider_status=503" in caplog.text
+    assert "error_type=MetaApiError" in caplog.text
     assert db.query(Report).filter_by(run_id=run.id).count() == 0
     assert inv.status == "failed"
     assert _steps(db, run)[-1] == ("segment_image", "error")

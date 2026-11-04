@@ -423,16 +423,24 @@ class HttpGeminiChatClient:
                         endpoint, model, response.status_code, perf_counter() - t0,
                     )
                     if response.status_code == 429 or response.status_code >= 500:
+                        provider_code = _provider_error_code(response)
+                        log.warning(
+                            "gemini request failed endpoint=%s model=%s status=%s provider_code=%s attempt=%s/%s",
+                            endpoint, model, response.status_code, provider_code, attempt + 1, attempts,
+                        )
+                        code_detail = f" (provider code {provider_code})" if provider_code else ""
                         last = MetaApiError(
-                            f"Gemini API {response.status_code} for {request_context}",
+                            f"Gemini API {response.status_code}{code_detail} for {request_context}",
                             response.status_code,
-                            _provider_error_code(response),
+                            provider_code,
                         )
                     elif response.status_code >= 400:
+                        provider_code = _provider_error_code(response)
+                        code_detail = f" (provider code {provider_code})" if provider_code else ""
                         raise MetaApiError(
-                            f"Gemini API {response.status_code} for {request_context}",
+                            f"Gemini API {response.status_code}{code_detail} for {request_context}",
                             response.status_code,
-                            _provider_error_code(response),
+                            provider_code,
                         )
                     else:
                         try:

@@ -48,7 +48,7 @@ class Conflict(DomainError):
 
 
 class MetaApiError(DomainError):
-    """The Meta Model API failed or returned something we cannot interpret. `status` is the HTTP status, if any."""
+    """An AI provider API failed or returned something we cannot interpret."""
 
     status_code = 502
 

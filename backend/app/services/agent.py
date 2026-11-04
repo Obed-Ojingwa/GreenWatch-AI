@@ -13,6 +13,7 @@ Failure semantics:
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 import uuid
@@ -29,12 +30,14 @@ from app.core.errors import DomainError, MetaApiError
 from app.db.models import (
     AgentStep, AnalysisRun, Image, InspectionTask, Investigation, SegmentationResult,
 )
-from app.services import quality, report as report_service, segmentation, validation
 from app.services.comparison import (
     Georef, area_m2, compare_masks, diff_overlay, m2_supported,
 )
+from app.services import quality, report as report_service, segmentation, validation
 from app.services.meta_client import MetaClient
 from app.services.storage import Storage
+
+log = logging.getLogger("greenwatch.agent")
 
 ROLES = ("earlier", "newer")
 FORBIDDEN_TERMS = (
@@ -735,6 +738,16 @@ def execute_run(db: Session, run_id: uuid.UUID, meta: MetaClient, storage: Stora
         run = db.get(AnalysisRun, run_id)
         run.status = "failed"
         run.error = (e.detail if isinstance(e, DomainError) else f"{type(e).__name__}: {e}")[:1000]
+        if isinstance(e, MetaApiError):
+            log.error(
+                "analysis run failed run_id=%s provider_status=%s provider_code=%s error_type=%s",
+                run_id, e.status, e.provider_code, type(e).__name__,
+            )
+        else:
+            log.error(
+                "analysis run failed run_id=%s error_type=%s",
+                run_id, type(e).__name__,
+            )
     run.completed_at = _now()
     inv = db.get(Investigation, run.investigation_id)
     inv.status = run.status

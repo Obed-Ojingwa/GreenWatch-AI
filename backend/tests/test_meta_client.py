@@ -280,6 +280,43 @@ def test_gemini_errors_are_sanitized_and_catalog_is_not_assumed(monkeypatch):
     assert HttpGeminiChatClient(settings).list_models().error_code == "catalog_not_supported"
 
 
+def test_gemini_503_error_includes_safe_provider_code_without_response_body(monkeypatch, caplog):
+    real_client = mc.httpx.Client
+    transport = mc.httpx.MockTransport(
+        lambda _: mc.httpx.Response(
+            503,
+            json={
+                "error": {
+                    "code": 503,
+                    "status": "UNAVAILABLE",
+                    "message": "sensitive provider detail must not be copied",
+                }
+            },
+        )
+    )
+    monkeypatch.setattr(
+        mc.httpx,
+        "Client",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
+    settings = get_settings()
+    monkeypatch.setattr(settings, "gemini_api_key", "private-gemini-key")
+    monkeypatch.setattr(settings, "gemini_base_url", "https://generativelanguage.googleapis.com/v1beta/openai")
+    monkeypatch.setattr(settings, "meta_max_retries", 1)
+
+    with pytest.raises(MetaApiError) as error:
+        HttpGeminiChatClient(settings).chat([{"role": "user", "content": "hi"}], model="gemini-test")
+
+    assert error.value.status == 503
+    assert error.value.provider_code == "UNAVAILABLE"
+    assert "provider code UNAVAILABLE" in error.value.detail
+    assert "sensitive provider detail" not in error.value.detail
+    assert "private-gemini-key" not in error.value.detail
+    assert "status=503 provider_code=UNAVAILABLE" in caplog.text
+    assert "sensitive provider detail" not in caplog.text
+    assert "private-gemini-key" not in caplog.text
+
+
 def test_gemini_client_keeps_meta_for_segmentation(monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "ai_provider", "gemini")

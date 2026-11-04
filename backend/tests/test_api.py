@@ -203,6 +203,37 @@ def test_ai_diagnostic_checks_gemini_without_exposing_credentials_or_assuming_ca
     assert "gemini-provider-key" not in response.text
 
 
+def test_ai_diagnostic_reports_gemini_provider_code_when_chat_fails(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "ai_provider", "gemini")
+    monkeypatch.setattr(settings, "gemini_api_key", "gemini-provider-key")
+    monkeypatch.setattr(
+        settings, "gemini_base_url", "https://generativelanguage.googleapis.com/v1beta/openai"
+    )
+    monkeypatch.setattr(settings, "meta_diagnostic_key", "diagnostic-key")
+    monkeypatch.setattr(settings, "agent_model", "gemini-test")
+
+    class FailingGemini:
+        def list_models(self):
+            return ModelCatalog(None, error_code="catalog_not_supported")
+
+        def chat(self, messages, *, model, tools=None, images=None, json_schema=None):
+            raise MetaApiError("safe provider error", 503, "UNAVAILABLE")
+
+    set_meta_client(FailingGemini())
+    response = client.post(
+        "/api/ai/diagnostics",
+        headers={"X-Meta-Diagnostic-Key": "diagnostic-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["diagnosis"] == "gemini_chat_request_failed"
+    assert response.json()["provider_status"] == 503
+    assert response.json()["provider_error_code"] == "UNAVAILABLE"
+    assert "gemini-provider-key" not in response.text
+    assert "safe provider error" not in response.text
+
+
 def test_sample_public_private_hidden(client, db):
     sample = Investigation(title="Sample", location_name="Lagos", objective="o", is_sample=True)
     private = Investigation(title="Private", location_name="Lagos", objective="o")
