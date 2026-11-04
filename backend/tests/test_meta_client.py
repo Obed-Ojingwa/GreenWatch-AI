@@ -317,6 +317,55 @@ def test_gemini_503_error_includes_safe_provider_code_without_response_body(monk
     assert "private-gemini-key" not in caplog.text
 
 
+def test_gemini_retries_transient_503_with_exponential_backoff(monkeypatch):
+    real_client = mc.httpx.Client
+    attempts = []
+    delays = []
+    replies = [
+        mc.httpx.Response(
+            503,
+            json={"error": {"status": "UNAVAILABLE", "message": "temporarily unavailable"}},
+        ),
+        mc.httpx.Response(
+            503,
+            json={"error": {"status": "UNAVAILABLE", "message": "temporarily unavailable"}},
+        ),
+        mc.httpx.Response(
+            503,
+            json={"error": {"status": "UNAVAILABLE", "message": "temporarily unavailable"}},
+        ),
+        mc.httpx.Response(200, json={"choices": [{"message": {"content": "OK"}}]}),
+    ]
+
+    def respond(_):
+        attempts.append(1)
+        return replies.pop(0)
+
+    monkeypatch.setattr(
+        mc.httpx,
+        "Client",
+        lambda **kwargs: real_client(transport=mc.httpx.MockTransport(respond), **kwargs),
+    )
+    monkeypatch.setattr(mc.time, "sleep", delays.append)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "gemini_api_key", "private-gemini-key")
+    monkeypatch.setattr(
+        settings,
+        "gemini_base_url",
+        "https://generativelanguage.googleapis.com/v1beta/openai",
+    )
+    monkeypatch.setattr(settings, "meta_max_retries", 4)
+
+    response = HttpGeminiChatClient(settings).chat(
+        [{"role": "user", "content": "hi"}],
+        model="gemini-test",
+    )
+
+    assert response.content == "OK"
+    assert len(attempts) == 4
+    assert delays == [1, 2, 4]
+
+
 def test_gemini_client_keeps_meta_for_segmentation(monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "ai_provider", "gemini")

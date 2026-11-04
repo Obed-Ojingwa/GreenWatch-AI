@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     agent_model: str = ""
     vision_qc_model: str = ""  # defaults to agent_model when empty
     meta_timeout_seconds: float = 120.0
-    meta_max_retries: int = 3  # total attempts for 429/5xx/transport errors
+    meta_max_retries: int = 4  # total attempts for 429/5xx/transport errors
 
     # --- limits ---
     max_upload_mb: int = 15

@@ -448,7 +448,7 @@ class HttpGeminiChatClient:
                         except ValueError as exc:
                             raise MetaApiError("Gemini API returned a non-JSON response.") from exc
                 if attempt < attempts - 1:
-                    time.sleep(min(2**attempt, 8))
+                    time.sleep(min(2**attempt, 60))
         assert last is not None
         raise last
 
