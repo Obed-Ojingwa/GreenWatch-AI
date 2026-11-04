@@ -313,7 +313,40 @@ def test_gemini_503_error_includes_safe_provider_code_without_response_body(monk
     assert "sensitive provider detail" not in error.value.detail
     assert "private-gemini-key" not in error.value.detail
     assert "status=503 provider_code=UNAVAILABLE" in caplog.text
+    assert "response_shape=json_error_code_message_status" in caplog.text
     assert "sensitive provider detail" not in caplog.text
+    assert "private-gemini-key" not in caplog.text
+
+
+def test_gemini_503_logs_non_json_shape_without_response_body(monkeypatch, caplog):
+    real_client = mc.httpx.Client
+    transport = mc.httpx.MockTransport(
+        lambda _: mc.httpx.Response(
+            503,
+            text="<html>private intermediary response</html>",
+            headers={"content-type": "text/html"},
+        )
+    )
+    monkeypatch.setattr(
+        mc.httpx,
+        "Client",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
+    settings = get_settings()
+    monkeypatch.setattr(settings, "gemini_api_key", "private-gemini-key")
+    monkeypatch.setattr(
+        settings,
+        "gemini_base_url",
+        "https://generativelanguage.googleapis.com/v1beta/openai",
+    )
+    monkeypatch.setattr(settings, "meta_max_retries", 1)
+
+    with pytest.raises(MetaApiError):
+        HttpGeminiChatClient(settings).chat([{"role": "user", "content": "hi"}], model="gemini-test")
+
+    assert "response_shape=non_json" in caplog.text
+    assert "response_bytes=42" in caplog.text
+    assert "private intermediary response" not in caplog.text
     assert "private-gemini-key" not in caplog.text
 
 

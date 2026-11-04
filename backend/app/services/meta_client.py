@@ -150,6 +150,22 @@ def _provider_error_code(response: httpx.Response) -> str | None:
     return str(code) if isinstance(code, int) else None
 
 
+def _provider_response_shape(response: httpx.Response) -> str:
+    if not response.content:
+        return "empty"
+    try:
+        payload = response.json()
+    except ValueError:
+        return "non_json"
+    if not isinstance(payload, dict):
+        return "json_non_object"
+    error = payload.get("error")
+    if isinstance(error, dict):
+        fields = {"code", "status", "type", "message"} & error.keys()
+        return "json_error_" + ("_".join(sorted(fields)) if fields else "no_fields")
+    return "json_without_error"
+
+
 # ---- HTTP client -------------------------------------------------------------------------------------
 
 class HttpMetaClient:
@@ -425,8 +441,11 @@ class HttpGeminiChatClient:
                     if response.status_code == 429 or response.status_code >= 500:
                         provider_code = _provider_error_code(response)
                         log.warning(
-                            "gemini request failed endpoint=%s model=%s status=%s provider_code=%s attempt=%s/%s",
-                            endpoint, model, response.status_code, provider_code, attempt + 1, attempts,
+                            "gemini request failed endpoint=%s model=%s status=%s provider_code=%s "
+                            "response_shape=%s response_bytes=%s attempt=%s/%s",
+                            endpoint, model, response.status_code, provider_code,
+                            _provider_response_shape(response), len(response.content),
+                            attempt + 1, attempts,
                         )
                         code_detail = f" (provider code {provider_code})" if provider_code else ""
                         last = MetaApiError(
