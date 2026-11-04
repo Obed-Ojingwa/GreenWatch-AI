@@ -1,4 +1,4 @@
-"""Segmentation quality control: backend statistics first, then a Muse Spark vision review.
+"""Segmentation quality control: backend statistics first, then a configured AI vision review.
 
 This is AI-assisted QC. It is NOT a guarantee that a mask is accurate, and the UI/report must say so.
 A mask is only `accepted` when the statistics gate passes AND the vision review says it is acceptable;

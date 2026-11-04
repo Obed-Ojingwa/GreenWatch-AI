@@ -11,7 +11,10 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TMP}/test.db"
 os.environ["LOCAL_STORAGE_DIR"] = f"{_TMP}/storage"
 os.environ["DEMO_ACCESS_KEY"] = "testkey"
 os.environ["FRONTEND_ORIGIN"] = "http://localhost:5173"
-for _k in ("META_API_KEY", "META_BASE_URL", "META_SEGMENT_PATH", "META_SEGMENT_MASKS_PATH"):
+for _k in (
+    "AI_PROVIDER", "GEMINI_API_KEY", "META_API_KEY", "META_BASE_URL",
+    "META_SEGMENT_PATH", "META_SEGMENT_MASKS_PATH",
+):
     os.environ.pop(_k, None)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

@@ -1,4 +1,24 @@
-# Meta Model API: documented contract and Gate 0 results
+# Production AI provider setup
+
+The production default is `AI_PROVIDER=gemini`: Gemini handles agent/tool orchestration,
+interpretations, and vision QC. Create `GEMINI_API_KEY` in [Google AI Studio](https://aistudio.google.com/apikey)
+and store it only in local ignored `backend/.env` or the Render backend environment. Set `AGENT_MODEL`
+to a model ID currently available to that key; `VISION_QC_MODEL` may override it for QC. The adapter
+uses Google's [OpenAI-compatible Chat Completions API](https://ai.google.dev/gemini-api/docs/openai)
+for function calling and image inputs. It does not send `response_format`/`json_schema`; QC asks for
+JSON and validates the response locally, failing closed if it cannot parse it.
+
+Meta remains a distinct provider for SAM pixel-mask segmentation. Set `META_API_KEY`,
+`META_BASE_URL`, `META_SEGMENT_PATH`, and `SAM_MODEL` for that role. A working Gemini chat call does
+not prove SAM access, and vice versa. Current successful provider runs must be attributed accurately;
+do not describe Gemini output as Muse Spark or Meta output.
+
+The Meta key belongs in local ignored `backend/.env` or Render's backend environment only. The Gemini
+key also stays server-side; neither provider key belongs in Vercel, `VITE_*`, source control, or chat.
+Set a separate `META_DIAGNOSTIC_KEY` to protect the sanitized `/api/ai/diagnostics` endpoint. That
+diagnostic makes a minimal billable chat call; Gemini model catalog listing is not assumed.
+
+## Meta Model API: documented contract and Gate 0 results
 
 The request shapes below reflect Meta's published API contract, not a successful request from this project's account. Run Gate 0 and record only sanitized account-specific results. Never paste API keys, raw mask output, signed URLs, or private image data into this file.
 
@@ -45,7 +65,16 @@ Use Gate 0 to test the account; do not share keys, image contents, or raw provid
 
 Official references: [Quickstart](https://dev.meta.ai/docs/quickstart),
 [Chat Completions](https://dev.meta.ai/docs/protocols/chat-completions), and
-[Media segmentation](https://dev.meta.ai/docs/media-segmentation).
+[Media segmentation](https://dev.meta.ai/docs/media-segmentation). Meta's
+[API reference](https://dev.meta.ai/docs/api-reference) documents `GET /v1/models`.
+
+When diagnosing a production `model_not_found`, use the protected `/api/meta/diagnostics`
+route to compare the configured model with the models returned by `GET /models` using the
+running service's key. If the requested model is absent from a successful catalog response,
+the running key does not list that model. If it is listed but chat still returns
+`model_not_found`, the failure is specific to the chat request/model availability and should be
+escalated to Meta with the sanitized model ID, endpoint, and error code. A local-key success
+does not establish which key or project Render is using.
 
 ## SAM 3.1 (segmentation)
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Create the public, read-only SAMPLE investigation from a REAL analysis run.
 
-Judges can open the sample without a demo key. It must be produced with real Meta model responses
+Judges can open the sample without a demo key. It must be produced with real provider responses
 (never synthetic data): this script drives the app's own HTTP routes, so the images are validated, the
-agent runs with the configured Meta client, and the sample is only flagged public if the run finishes.
+agent runs with the configured AI and SAM clients, and the sample is only flagged public if the run finishes.
 
     cd backend
     python ../scripts/seed_sample.py \\
@@ -13,7 +13,7 @@ agent runs with the configured Meta client, and the sample is only flagged publi
         --newer /path/newer.jpg --newer-date 2024-02-01 \\
         --source "Own drone survey" --categories buildings,trees
 
-Point DATABASE_URL / STORAGE_BACKEND (and the Meta settings) at the target environment first. To seed
+Point DATABASE_URL / STORAGE_BACKEND (and the Gemini and Meta SAM settings) at the target environment first. To seed
 production, run it locally with the production DATABASE_URL and Supabase storage settings in the shell.
 Only imagery you own or have the right to publish may be used (see docs/data-sources.md).
 """
@@ -78,7 +78,7 @@ def main() -> int:
             print(f"  - {problem}")
         return 2
     if not (s.meta_api_key and s.meta_base_url and s.agent_model and s.sam_model):
-        print("Meta API is not configured; a sample must come from a real run. Finish Gate 0 first.")
+        print("AI/SAM provider configuration is incomplete; finish Gate 0 first.")
         return 2
     if not s.demo_access_key:
         print("DEMO_ACCESS_KEY is empty; set it so the seeding requests are authorised.")

@@ -29,10 +29,21 @@ services:
         sync: false
       - key: FRONTEND_ORIGIN  # comma-separated; e.g. Vercel and Render URLs
         sync: false
-      # Meta Model API: fill from docs/meta-api-notes.md after Gate 0
+      # Gemini chat and vision (production primary)
+      - key: AI_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai
+      - key: AGENT_MODEL
+        sync: false
+      - key: VISION_QC_MODEL
+        sync: false
+      # Meta SAM segmentation remains a separate provider
       - key: META_API_KEY
         sync: false
-      - key: META_DIAGNOSTIC_KEY  # optional, separate key for the protected runtime probe
+      - key: META_DIAGNOSTIC_KEY  # optional, separate key for the protected AI runtime probe
         sync: false
       - key: META_BASE_URL
         sync: false
@@ -51,10 +62,6 @@ services:
       - key: META_SAM_MASK_ENCODING
         value: one_bit
       - key: SAM_MODEL
-        sync: false
-      - key: AGENT_MODEL
-        sync: false
-      - key: VISION_QC_MODEL
         sync: false
       - key: MAX_UPLOAD_MB
         value: "15"

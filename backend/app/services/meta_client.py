@@ -1,8 +1,8 @@
-"""All HTTP to the Meta Model API lives here.
+"""Provider clients for Gemini chat/vision and Meta SAM segmentation.
 
-Muse Spark uses the OpenAI-compatible Chat Completions adapter. SAM uses the Responses API stream
-when META_SEGMENT_PATH ends in ``responses``; other paths retain the configurable JSON-mask adapter.
-The live provider contract still requires Gate 0 verification against the configured account.
+Gemini uses the OpenAI-compatible Chat Completions API for agent/tool calls and vision QC. Meta SAM
+uses the Responses API stream when META_SEGMENT_PATH ends in ``responses``; other paths retain the
+configurable JSON-mask adapter. Provider access still requires a live check with the configured keys.
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import time  # only time.sleep is used through this name (tests replace it to sk
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 import httpx
 import numpy as np
@@ -140,8 +141,13 @@ def _provider_error_code(response: httpx.Response) -> str | None:
     error = payload.get("error")
     if not isinstance(error, dict):
         return None
-    code = error.get("code") or error.get("type")
-    return code if isinstance(code, str) else None
+    code = error.get("code")
+    if isinstance(code, str):
+        return code
+    status = error.get("status") or error.get("type")
+    if isinstance(status, str):
+        return status
+    return str(code) if isinstance(code, int) else None
 
 
 # ---- HTTP client -------------------------------------------------------------------------------------
@@ -335,7 +341,7 @@ class HttpMetaClient:
             msg = data["choices"][0]["message"]
         except (KeyError, IndexError, TypeError) as exc:
             raise MetaApiError(
-                f"Unrecognised chat response; update HttpMetaClient._parse_chat. Keys: "
+                "Unrecognised OpenAI-compatible chat response. Keys: "
                 f"{sorted(data) if isinstance(data, dict) else type(data).__name__}"
             ) from exc
         calls: list[ChatToolCall] = []
@@ -351,13 +357,134 @@ class HttpMetaClient:
         return ChatResponse(content=msg.get("content"), tool_calls=calls)
 
 
+class HttpGeminiChatClient:
+    """Gemini OpenAI-compatible chat adapter; SAM remains on the Meta client."""
+
+    def __init__(self, settings: Settings | None = None):
+        self.s = settings or get_settings()
+
+    def list_models(self) -> ModelCatalog:
+        # The OpenAI-compatibility docs do not define a model-catalog endpoint.
+        return ModelCatalog(status=None, error_code="catalog_not_supported")
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        model: str,
+        tools: list[dict[str, Any]] | None = None,
+        images: list[bytes] | None = None,
+        json_schema: dict[str, Any] | None = None,
+    ) -> ChatResponse:
+        s = self.s
+        if not s.gemini_api_key:
+            raise MetaApiError("GEMINI_API_KEY is not set.")
+        if not s.gemini_base_url:
+            raise MetaApiError("GEMINI_BASE_URL is not set.")
+        url = s.gemini_base_url.rstrip("/") + "/chat/completions"
+        endpoint = urlsplit(url).path.strip("/")
+        request_context = f"endpoint '{endpoint}' model '{model}'"
+        headers = {
+            "Authorization": f"Bearer {s.gemini_api_key}",
+            "Content-Type": "application/json",
+        }
+        msgs = clean_messages(messages)
+        if images:
+            for message in reversed(msgs):
+                if message.get("role") == "user":
+                    text = message["content"] if isinstance(message.get("content"), str) else ""
+                    message["content"] = [{"type": "text", "text": text}] + [
+                        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + _b64(image)}}
+                        for image in images
+                    ]
+                    break
+        body: dict[str, Any] = {"model": model, "messages": msgs}
+        if tools:
+            body["tools"] = [{"type": "function", "function": tool} for tool in tools]
+        # The OpenAI-compatible Gemini docs do not document response_format/json_schema.
+        # QC still validates the model's JSON response locally and fails closed if malformed.
+        del json_schema
+
+        attempts = max(1, int(s.meta_max_retries))
+        last: MetaApiError | None = None
+        with httpx.Client(timeout=s.meta_timeout_seconds) as http:
+            for attempt in range(attempts):
+                t0 = perf_counter()
+                try:
+                    response = http.post(url, json=body, headers=headers)
+                except (httpx.TimeoutException, httpx.TransportError) as exc:
+                    last = MetaApiError(
+                        f"Gemini API request failed for {request_context}: {type(exc).__name__}"
+                    )
+                    log.warning("Gemini transport error (attempt %s/%s): %s", attempt + 1, attempts, type(exc).__name__)
+                else:
+                    log.info(
+                        "Gemini POST endpoint=%s model=%s -> %s in %.2fs",
+                        endpoint, model, response.status_code, perf_counter() - t0,
+                    )
+                    if response.status_code == 429 or response.status_code >= 500:
+                        last = MetaApiError(
+                            f"Gemini API {response.status_code} for {request_context}",
+                            response.status_code,
+                            _provider_error_code(response),
+                        )
+                    elif response.status_code >= 400:
+                        raise MetaApiError(
+                            f"Gemini API {response.status_code} for {request_context}",
+                            response.status_code,
+                            _provider_error_code(response),
+                        )
+                    else:
+                        try:
+                            return HttpMetaClient._parse_chat(response.json())
+                        except ValueError as exc:
+                            raise MetaApiError("Gemini API returned a non-JSON response.") from exc
+                if attempt < attempts - 1:
+                    time.sleep(min(2**attempt, 8))
+        assert last is not None
+        raise last
+
+
+class GeminiWithMetaSegmentationClient:
+    """Route chat and vision to Gemini while retaining Meta SAM for pixel masks."""
+
+    def __init__(self, settings: Settings | None = None):
+        self.s = settings or get_settings()
+        self._chat_client = HttpGeminiChatClient(self.s)
+        self._segmentation_client = HttpMetaClient(self.s)
+
+    def list_models(self) -> ModelCatalog:
+        return self._chat_client.list_models()
+
+    def segment(self, image_png: bytes, prompt: str) -> list[np.ndarray]:
+        return self._segmentation_client.segment(image_png, prompt)
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        model: str,
+        tools: list[dict[str, Any]] | None = None,
+        images: list[bytes] | None = None,
+        json_schema: dict[str, Any] | None = None,
+    ) -> ChatResponse:
+        return self._chat_client.chat(
+            messages, model=model, tools=tools, images=images, json_schema=json_schema
+        )
+
+
 # ---- factory (tests inject a fake) -------------------------------------------------------------------
 
 _override: MetaClient | None = None
 
 
 def get_meta_client() -> MetaClient:
-    return _override if _override is not None else HttpMetaClient()
+    if _override is not None:
+        return _override
+    settings = get_settings()
+    if settings.ai_provider.strip().lower() == "gemini":
+        return GeminiWithMetaSegmentationClient(settings)
+    return HttpMetaClient(settings)
 
 
 def set_meta_client(client: MetaClient | None) -> None:

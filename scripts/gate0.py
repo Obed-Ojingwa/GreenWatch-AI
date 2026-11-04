@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GATE 0: prove the Meta models work on YOUR imagery before relying on anything else.
+"""GATE 0: verify the configured chat/vision provider and Meta SAM on YOUR imagery.
 
 Run from the backend folder so backend/.env is picked up:
 
@@ -14,15 +14,16 @@ Use it first.
 `run` checks, in order, and exits 0 only if every check passes:
     config            required settings are present
     chat              one plain chat call works (auth, base URL, model id)
-    structured_output a JSON-schema constrained answer parses
+    json_response      a requested JSON answer parses (not a constrained-output guarantee)
     sam               SAM returns decodable masks (saved as PNGs, with pixel counts)
     overlay           an overlay image is produced
-    vision_review     Muse Spark reviews image + overlay and returns a parseable verdict
-    tool_call         a real tool-call round trip completes through Muse Spark
+    vision_review     configured AI reviews image + overlay and returns a parseable verdict
+    tool_call         a real tool-call round trip completes through the configured AI
     alignment         (only with --newer) the pair passes the app's own validation
 
-Nothing is mocked. Failures print the full error and the script keeps going so one run shows everything
-that is broken. Outputs go to gate0_out/ (gitignored). Record what you learn in docs/meta-api-notes.md.
+Nothing is mocked. The script keeps going after failures so one run shows everything that is broken.
+Outputs go to gate0_out/ (gitignored); inspect details locally and share only sanitized results.
+Record non-secret findings in docs/meta-api-notes.md.
 """
 from __future__ import annotations
 
@@ -61,7 +62,7 @@ from PIL import Image  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.core.errors import MetaApiError  # noqa: E402
 from app.services.mask_codec import decode_mask  # noqa: E402
-from app.services.meta_client import HttpMetaClient, extract_path, fill_template  # noqa: E402
+from app.services.meta_client import HttpMetaClient, extract_path, fill_template, get_meta_client  # noqa: E402
 from app.services import sam_responses  # noqa: E402
 from app.services.quality import mask_stats, vision_review  # noqa: E402
 from app.services.segmentation import make_overlay  # noqa: E402
@@ -226,6 +227,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     banner("config")
     required = {"META_API_KEY": s.meta_api_key, "META_BASE_URL": s.meta_base_url, "AGENT_MODEL": s.agent_model,
                 "SAM_MODEL": s.sam_model, "META_SEGMENT_PATH": s.meta_segment_path}
+    if s.ai_provider.strip().lower() == "gemini":
+        required["GEMINI_API_KEY"] = s.gemini_api_key
+    elif s.ai_provider.strip().lower() == "meta":
+        required["META_CHAT_PATH"] = s.meta_chat_path
+    else:
+        required["AI_PROVIDER (gemini or meta)"] = ""
     if not sam_responses.is_responses_path(s.meta_segment_path):
         required["META_SEGMENT_MASKS_PATH"] = s.meta_segment_masks_path
     missing = [k for k, v in required.items() if not v]
@@ -234,7 +241,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             print("Set the missing provider settings from the official Meta docs, then run `probe`.")
         else:
             print("Run `probe` first to discover META_SEGMENT_MASKS_PATH; fill the rest from the Meta docs.")
-    client = HttpMetaClient(s)
+    client = get_meta_client()
 
     earlier_path = _abs(args.earlier)
     png, rgb = load_png(earlier_path, s.max_image_dim)
@@ -247,14 +254,15 @@ def cmd_run(args: argparse.Namespace) -> int:
         ck.record("chat", bool(r.content and r.content.strip()), f"{time.perf_counter()-t0:.2f}s, reply={ (r.content or '')[:60]!r}")
     ck.guard("chat", chat_plain)
 
-    banner("structured output")
+    banner("JSON response parsing")
     def structured():
-        schema = {"name": "ping", "schema": {"type": "object", "properties": {"ok": {"type": "boolean"}},
-                                              "required": ["ok"], "additionalProperties": False}, "strict": True}
-        r = client.chat([{"role": "user", "content": 'Return JSON {"ok": true}.'}], model=s.agent_model, json_schema=schema)
+        r = client.chat(
+            [{"role": "user", "content": 'Return only valid JSON with one boolean field: {"ok": true}.'}],
+            model=s.agent_model,
+        )
         parsed = json.loads(r.content or "")
-        ck.record("structured_output", parsed.get("ok") is True, f"parsed={parsed}")
-    ck.guard("structured_output", structured)
+        ck.record("json_response", parsed.get("ok") is True, f"parsed={parsed}")
+    ck.guard("json_response", structured)
 
     banner("sam segmentation")
     masks_by_prompt: dict[str, np.ndarray] = {}
@@ -282,7 +290,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     ck.record("overlay", any((OUT / f"overlay_{p}.png").exists() for p in prompts),
               "inspect gate0_out/overlay_*.png by eye: is the tinted region plausible?")
 
-    banner("vision review (Muse Spark looks at image + overlay)")
+    provider_name = "Gemini" if s.ai_provider.strip().lower() == "gemini" else "Muse Spark"
+    banner(f"vision review ({provider_name} looks at image + overlay)")
     def vision():
         prompt = next((p for p in prompts if p in masks_by_prompt and masks_by_prompt[p].any()), None)
         if prompt is None:
@@ -353,7 +362,7 @@ def main() -> int:
     try:
         return cmd_probe(args) if args.cmd == "probe" else cmd_run(args)
     except MetaApiError as exc:
-        print(f"\nMeta API error: {exc}")
+        print(f"\nProvider error: {exc}")
         return 1
 
 

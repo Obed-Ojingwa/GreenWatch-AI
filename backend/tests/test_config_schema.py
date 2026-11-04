@@ -90,6 +90,7 @@ def test_production_refuses_unsafe_config():
         environment="production", demo_access_key="x" * 20, database_url="postgresql://u:p@h/db",
         storage_backend="supabase", supabase_url="https://x.supabase.co", supabase_service_key="k",
         frontend_origin="https://greenwatch.example", _env_file=None,
+        ai_provider="meta",
         meta_api_key="k", meta_base_url="https://api.meta.ai/v1", agent_model="muse-spark-1.3",
         sam_model="sam-3.1", meta_chat_path="chat/completions", meta_segment_path="responses",
     )
@@ -102,3 +103,22 @@ def test_production_refuses_unsafe_config():
     }, _env_file=None)
     assert any("SUPABASE_URL" in problem for problem in production_problems(bad_storage_url))
     assert production_problems(Settings(environment="development", _env_file=None)) == []
+
+
+def test_production_requires_distinct_gemini_and_meta_segmentation_credentials():
+    settings = Settings(
+        environment="production", demo_access_key="x" * 20, database_url="postgresql://db",
+        storage_backend="supabase", supabase_url="https://x.supabase.co", supabase_service_key="k",
+        frontend_origin="https://greenwatch.example", ai_provider="gemini", agent_model="gemini-test",
+        gemini_api_key="g", meta_api_key="m", meta_base_url="https://api.meta.ai/v1",
+        meta_segment_path="responses", sam_model="sam-test", _env_file=None,
+    )
+    assert production_problems(settings) == []
+    assert any(
+        "GEMINI_API_KEY" in problem
+        for problem in production_problems(settings.model_copy(update={"gemini_api_key": ""}))
+    )
+    assert any(
+        "META_API_KEY" in problem
+        for problem in production_problems(settings.model_copy(update={"meta_api_key": ""}))
+    )

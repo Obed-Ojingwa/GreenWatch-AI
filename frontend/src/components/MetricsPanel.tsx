@@ -62,7 +62,7 @@ function CategoryBlock({ m, run }: { m: CategoryMetrics; run: AgentRun }) {
             <span className="font-medium text-ink">Suggested next step:</span> {interp.recommended_action}
           </p>
           <p className="mt-1 text-xs text-ink-soft">
-            Written by {interp.source === 'muse_spark' ? 'Muse Spark' : 'the backend template'}. All numbers above come from backend measurement.
+            Written by {interp.source === 'gemini' ? 'Gemini' : interp.source === 'muse_spark' ? 'Muse Spark' : 'the backend template'}. All numbers above come from backend measurement.
           </p>
         </div>
       )}

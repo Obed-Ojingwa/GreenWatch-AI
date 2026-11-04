@@ -7,19 +7,19 @@ Browser (React + TypeScript + Tailwind, Vercel)
 FastAPI (Render)  ----------------------------------------------+
   routes: investigations | runs | files                          |
   services:                                                      |
-    agent.py        tool loop + guardrails (Muse Spark)          |
+    agent.py        tool loop + guardrails (configured AI)       |
     validation.py   pair checks, ORB + RANSAC alignment          |
     segmentation.py SAM calls, cache, overlays                   |
     quality.py      mask stats + vision review                   |
     comparison.py   pure NumPy metrics                           |
     report.py       report gate + ReportLab PDF                  |
-    meta_client.py  ALL Meta HTTP (config-driven)                |
+    meta_client.py  Gemini chat/vision + Meta SAM HTTP           |
     mask_codec.py   PNG / RLE / polygon / raster mask decoding   |
     storage.py      local (dev) | Supabase Storage (prod)        |
     |                         |                                  |
     v                         v                                  v
 Postgres (Supabase)     Object storage (private bucket)   Meta Model API
-7 tables                 images, masks, overlays, PDFs     SAM 3.1, Muse Spark
+7 tables                 images, masks, overlays, PDFs     Gemini, Meta SAM 3.1
 ```
 
 A modular monolith. Analyses run as FastAPI background tasks; the frontend polls `GET /api/agent-runs/{id}`.
@@ -30,8 +30,8 @@ A modular monolith. Analyses run as FastAPI background tasks; the frontend polls
 2. **Pixels, not metres.** Square metres are produced only for a projected CRS with a known positive pixel size.
 3. **Percent change is undefined when the earlier count is zero**; the absolute difference is reported instead.
 4. **A failed pair check cannot be overridden by the agent.** A `reject` verdict stops the run; a marginal one continues as `review_required`.
-5. **Segmentation QC is AI-assisted, not a guarantee.** Backend coverage statistics run first, then a Muse Spark vision review of image + overlay. A bad mask is retried with a different prompt up to `MAX_QC_RETRIES`, then flagged for human review. An unparseable review counts as "not acceptable".
-6. **A Meta API failure marks the run `failed` and produces no report.** Runs that finish but are not trustworthy end as `review_required` and produce a clearly labelled report.
+5. **Segmentation QC is AI-assisted, not a guarantee.** Backend coverage statistics run first, then the configured chat/vision provider reviews the image + overlay (Gemini by default). A bad mask is retried with a different prompt up to `MAX_QC_RETRIES`, then flagged for human review. An unparseable review counts as "not acceptable".
+6. **An AI or SAM provider failure marks the run `failed` and produces no report.** Runs that finish but are not trustworthy end as `review_required` and produce a clearly labelled report.
 7. **Wording is "potential change detected, requires human review".** Never illegality, cause or blame.
 
 ## Run statuses
@@ -71,4 +71,4 @@ For a new Supabase project, apply `supabase_migrations/20261030164200_initial_sc
 
 ## Security model (demo mode)
 
-No user accounts. A public, read-only sample investigation; every write or analysis route requires `X-Demo-Key`. IDs are UUIDs; storage paths are never returned (short-lived signed URLs only); uploads are type, size and pixel-count limited; images cannot be replaced after a run exists; the Meta key and Supabase service key live only in the backend environment. In production the app refuses to start with an unsafe configuration.
+No user accounts. A public, read-only sample investigation; every write or analysis route requires `X-Demo-Key`. IDs are UUIDs; storage paths are never returned (short-lived signed URLs only); uploads are type, size and pixel-count limited; images cannot be replaced after a run exists; Gemini, Meta, and Supabase service keys live only in the backend environment. In production the app refuses to start with an unsafe configuration.

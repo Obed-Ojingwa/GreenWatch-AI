@@ -38,7 +38,7 @@ def test_happy_path_completed_with_full_report(db, storage):
     assert m["new_pixels"] > m["old_pixels"] > 0
     assert m["metric_type"] == "pixel_count" and not m["real_world_area_available"]
     assert "area_m2" not in m  # test G: no georeference -> no m2
-    assert run.interpretation["items"][0]["source"] == "muse_spark"
+    assert run.interpretation["items"][0]["source"] == "gemini"
     rep = db.query(Report).filter_by(run_id=run.id).one()
     assert rep.kind == "full"
     assert storage.download_bytes(rep.storage_path)[:4] == b"%PDF"
@@ -111,7 +111,7 @@ def test_h_bad_evidence_id_rejected_then_corrected(db, storage):
     _, run = _go(db, storage, FakeMeta(interp_mode="bad_evidence"))
     subs = [(t, s) for t, s in _steps(db, run) if t == "submit_interpretation"]
     assert subs == [("submit_interpretation", "error"), ("submit_interpretation", "ok")]
-    assert run.interpretation["items"][0]["source"] == "muse_spark"
+    assert run.interpretation["items"][0]["source"] == "gemini"
 
 
 def test_illegality_wording_rejected(db, storage):

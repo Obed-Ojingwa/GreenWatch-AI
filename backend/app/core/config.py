@@ -1,4 +1,4 @@
-"""Application settings (environment variables / .env). Meta API fields are UNVERIFIED until Gate 0 passes."""
+"""Application settings (environment variables / .env). Provider access remains unverified until Gate 0 passes."""
 from __future__ import annotations
 
 from functools import lru_cache
@@ -29,7 +29,11 @@ class Settings(BaseSettings):
         "https://greenwatch-ai-theta.vercel.app,https://greenwatch-ai-670g.onrender.com"
     )  # comma-separated allowed origins; Render's FRONTEND_ORIGIN overrides this default
 
-    # --- Meta Model API (VERIFY every value against the Meta docs; see docs/meta-api-notes.md) ---
+    # --- Model providers ---
+    ai_provider: str = "gemini"  # gemini | meta; SAM segmentation remains on Meta
+    gemini_api_key: str = ""
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+    # Meta API: used for SAM segmentation and, when AI_PROVIDER=meta, chat/vision too.
     meta_api_key: str = ""
     meta_diagnostic_key: str = ""
     meta_base_url: str = ""
@@ -99,14 +103,33 @@ def production_problems(s: Settings) -> list[str]:
     origins = [o.strip() for o in s.frontend_origin.split(",") if o.strip()]
     if not origins or any("localhost" in o or "127.0.0.1" in o for o in origins):
         problems.append("FRONTEND_ORIGIN must list the deployed frontend URL(s), not localhost.")
-    if not s.meta_api_key:
-        problems.append("META_API_KEY is required for production analysis.")
+    provider = s.ai_provider.strip().lower()
+    if provider not in {"gemini", "meta"}:
+        problems.append("AI_PROVIDER must be either 'gemini' or 'meta'.")
+    elif provider == "gemini":
+        if not s.gemini_api_key:
+            problems.append("GEMINI_API_KEY is required when AI_PROVIDER=gemini.")
+        if not s.gemini_base_url.startswith("https://"):
+            problems.append("GEMINI_BASE_URL must be an HTTPS URL.")
+        if not s.agent_model:
+            problems.append("AGENT_MODEL must be set to an available Gemini model.")
+    else:
+        if not s.meta_api_key:
+            problems.append("META_API_KEY is required for Meta chat and SAM segmentation.")
+        if not s.meta_base_url or not s.meta_base_url.startswith("https://"):
+            problems.append("META_BASE_URL must be set to the HTTPS Meta Model API base URL.")
+        if not s.meta_chat_path:
+            problems.append("META_CHAT_PATH must be set when AI_PROVIDER=meta.")
+        if not s.agent_model:
+            problems.append("AGENT_MODEL must be set to an available Meta chat model.")
+
+    # SAM is a distinct segmentation provider regardless of the chat/vision provider.
+    if not s.meta_api_key and provider != "meta":
+        problems.append("META_API_KEY is required for Meta SAM segmentation.")
     if not s.meta_base_url or not s.meta_base_url.startswith("https://"):
-        problems.append("META_BASE_URL must be set to the HTTPS Meta Model API base URL.")
+        problems.append("META_BASE_URL must be set to the HTTPS Meta Model API base URL for SAM.")
     for name, value in (
-        ("AGENT_MODEL", s.agent_model),
         ("SAM_MODEL", s.sam_model),
-        ("META_CHAT_PATH", s.meta_chat_path),
         ("META_SEGMENT_PATH", s.meta_segment_path),
     ):
         if not value:

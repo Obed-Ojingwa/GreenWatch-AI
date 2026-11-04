@@ -32,25 +32,34 @@ def run_in_background(run_id: uuid.UUID) -> None:
 
 
 @router.post(
+    "/ai/diagnostics",
+    dependencies=[Depends(require_meta_diagnostic_key)],
+)
+@router.post(
     "/meta/diagnostics",
     dependencies=[Depends(require_meta_diagnostic_key)],
 )
 @limiter.limit("2/hour")
-def diagnose_meta_configuration(request: Request):
+def diagnose_ai_configuration(request: Request):
     settings = get_settings()
-    base = urlsplit(settings.meta_base_url)
-    path = settings.meta_chat_path.split("?", 1)[0].strip("/")
+    provider = settings.ai_provider.strip().lower()
+    is_gemini = provider == "gemini"
+    base_url = settings.gemini_base_url if is_gemini else settings.meta_base_url
+    path = "chat/completions" if is_gemini else settings.meta_chat_path.split("?", 1)[0].strip("/")
+    key_configured = bool(settings.gemini_api_key) if is_gemini else bool(settings.meta_api_key)
+    base = urlsplit(base_url)
     request_path = "/".join(part for part in (base.path.strip("/"), path) if part)
     details = {
+        "provider": provider,
         "api_host": base.hostname,
         "endpoint_path": f"/{request_path}" if request_path else "",
         "model": settings.agent_model,
     }
-    if not settings.meta_api_key or not base.hostname or not settings.agent_model or not path:
+    if not key_configured or not base.hostname or not settings.agent_model or not path:
         return {
             "ok": False,
             "result": "missing_configuration",
-            "api_key_configured": bool(settings.meta_api_key),
+            "api_key_configured": key_configured,
             **details,
         }
 
@@ -81,7 +90,7 @@ def diagnose_meta_configuration(request: Request):
             ),
             "available_relevant_models": [
                 model_id for model_id in catalog.model_ids
-                if "muse" in model_id.lower() or "sam" in model_id.lower()
+                if any(term in model_id.lower() for term in (("gemini",) if is_gemini else ("muse", "sam")))
             ],
             **details,
         }
@@ -98,7 +107,7 @@ def diagnose_meta_configuration(request: Request):
         ),
         "available_relevant_models": [
             model_id for model_id in catalog.model_ids
-            if "muse" in model_id.lower() or "sam" in model_id.lower()
+            if any(term in model_id.lower() for term in (("gemini",) if is_gemini else ("muse", "sam")))
         ],
         **details,
     }

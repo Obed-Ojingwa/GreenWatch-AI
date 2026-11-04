@@ -1,5 +1,6 @@
 """HttpMetaClient over a real socket against the test-only mock server (see mock_meta_server.py)."""
 import io
+import json
 import types
 
 import numpy as np
@@ -11,7 +12,15 @@ from app.core.errors import MetaApiError
 from app.db.models import AnalysisRun, Report
 from app.services import meta_client as mc
 from app.services.agent import execute_run
-from app.services.meta_client import HttpMetaClient, PathNotFound, clean_messages, extract_path, fill_template
+from app.services.meta_client import (
+    GeminiWithMetaSegmentationClient,
+    HttpGeminiChatClient,
+    HttpMetaClient,
+    PathNotFound,
+    clean_messages,
+    extract_path,
+    fill_template,
+)
 from tests.helpers import FakeMeta, make_investigation, make_pair, new_run
 from tests.mock_meta_server import MockState, RunningServer
 
@@ -190,6 +199,94 @@ def test_list_models_uses_configured_auth_and_returns_only_model_ids(monkeypatch
     assert catalog.model_ids == ("muse-spark-1.3", "sam-3.1")
     assert requested[0].url.path == "/v1/models"
     assert requested[0].headers["authorization"] == "Bearer private-test-key"
+
+
+def test_gemini_chat_uses_compatibility_contract_for_tools_images_and_safe_json(monkeypatch):
+    real_client = mc.httpx.Client
+    requested = []
+    tool_reply = {
+        "choices": [{
+            "message": {
+                "content": None,
+                "tool_calls": [{
+                    "id": "call_1",
+                    "function": {"name": "get_investigation", "arguments": "{\"ok\": true}"},
+                }],
+            }
+        }]
+    }
+    transport = mc.httpx.MockTransport(
+        lambda request: requested.append(request) or mc.httpx.Response(200, json=tool_reply)
+    )
+    monkeypatch.setattr(
+        mc.httpx,
+        "Client",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
+    settings = get_settings()
+    monkeypatch.setattr(settings, "gemini_api_key", "private-gemini-key")
+    monkeypatch.setattr(
+        settings, "gemini_base_url", "https://generativelanguage.googleapis.com/v1beta/openai"
+    )
+    client = HttpGeminiChatClient(settings)
+
+    response = client.chat(
+        [{"role": "user", "content": "Review this"}],
+        model="gemini-test",
+        tools=[{"name": "get_investigation", "parameters": {"type": "object"}}],
+        images=[b"png"],
+        json_schema={"name": "review", "schema": {"type": "object"}, "strict": True},
+    )
+
+    request = requested[0]
+    body = json.loads(request.content)
+    assert request.url == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    assert request.headers["authorization"] == "Bearer private-gemini-key"
+    assert body["model"] == "gemini-test"
+    assert body["tools"][0]["function"]["name"] == "get_investigation"
+    parts = body["messages"][0]["content"]
+    assert parts[0] == {"type": "text", "text": "Review this"}
+    assert parts[1]["type"] == "image_url"
+    assert "response_format" not in body
+    assert response.tool_calls[0].name == "get_investigation"
+    assert response.tool_calls[0].arguments == {"ok": True}
+    assert "private-gemini-key" not in str(response)
+
+
+def test_gemini_errors_are_sanitized_and_catalog_is_not_assumed(monkeypatch):
+    real_client = mc.httpx.Client
+    transport = mc.httpx.MockTransport(
+        lambda _: mc.httpx.Response(
+            404, json={"error": {"code": 404, "status": "NOT_FOUND", "message": "unknown model"}}
+        )
+    )
+    monkeypatch.setattr(
+        mc.httpx,
+        "Client",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
+    settings = get_settings()
+    monkeypatch.setattr(settings, "gemini_api_key", "private-gemini-key")
+    monkeypatch.setattr(settings, "gemini_base_url", "https://generativelanguage.googleapis.com/v1beta/openai")
+    monkeypatch.setattr(settings, "meta_max_retries", 1)
+
+    with pytest.raises(MetaApiError) as error:
+        HttpGeminiChatClient(settings).chat([{"role": "user", "content": "hi"}], model="missing-model")
+
+    assert error.value.status == 404
+    assert error.value.provider_code == "NOT_FOUND"
+    assert "private-gemini-key" not in error.value.detail
+    assert "unknown model" not in error.value.detail
+    assert HttpGeminiChatClient(settings).list_models().error_code == "catalog_not_supported"
+
+
+def test_gemini_client_keeps_meta_for_segmentation(monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "ai_provider", "gemini")
+    client = mc.get_meta_client()
+    assert isinstance(client, GeminiWithMetaSegmentationClient)
+    assert isinstance(client._segmentation_client, HttpMetaClient)
+    assert isinstance(client._chat_client, HttpGeminiChatClient)
 
 
 # ---- the whole agent over real HTTP --------------------------------------------------------------
