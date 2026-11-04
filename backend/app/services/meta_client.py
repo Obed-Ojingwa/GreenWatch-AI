@@ -40,7 +40,16 @@ class ChatResponse:
     tool_calls: list[ChatToolCall] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class ModelCatalog:
+    status: int | None
+    model_ids: tuple[str, ...] = ()
+    error_code: str | None = None
+
+
 class MetaClient(Protocol):
+    def list_models(self) -> ModelCatalog: ...
+
     def segment(self, image_png: bytes, prompt: str) -> list[np.ndarray]:
         """Return one bool mask (same HxW as the image) per detected instance; [] when nothing is detected."""
 
@@ -149,6 +158,46 @@ class HttpMetaClient:
         if value:
             h[s.meta_auth_header or "Authorization"] = value
         return h
+
+    def list_models(self) -> ModelCatalog:
+        s = self.s
+        if not s.meta_base_url or not s.meta_api_key:
+            return ModelCatalog(
+                status=None,
+                error_code="missing_configuration",
+            )
+        url = s.meta_base_url.rstrip("/") + "/models"
+        try:
+            with httpx.Client(timeout=s.meta_timeout_seconds) as http:
+                response = http.get(url, headers=self._headers())
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            return ModelCatalog(
+                status=None,
+                error_code=type(exc).__name__,
+            )
+        if response.status_code >= 400:
+            return ModelCatalog(
+                status=response.status_code,
+                error_code=_provider_error_code(response),
+            )
+        try:
+            payload = response.json()
+        except ValueError:
+            return ModelCatalog(
+                status=response.status_code,
+                error_code="invalid_response",
+            )
+        rows = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            return ModelCatalog(
+                status=response.status_code,
+                error_code="invalid_response",
+            )
+        model_ids = tuple(
+            row["id"] for row in rows
+            if isinstance(row, dict) and isinstance(row.get("id"), str)
+        )
+        return ModelCatalog(status=response.status_code, model_ids=model_ids)
 
     def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         s = self.s

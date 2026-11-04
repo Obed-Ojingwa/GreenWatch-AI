@@ -54,24 +54,52 @@ def diagnose_meta_configuration(request: Request):
             **details,
         }
 
+    client = get_meta_client()
+    catalog = client.list_models()
     try:
-        response = get_meta_client().chat(
+        response = client.chat(
             [{"role": "user", "content": "Reply with exactly the word OK."}],
             model=settings.agent_model,
         )
     except MetaApiError as exc:
+        if catalog.status == 200 and settings.agent_model not in catalog.model_ids:
+            diagnosis = "model_not_listed_for_this_api_key"
+        elif catalog.status == 200:
+            diagnosis = "model_listed_but_chat_request_rejected"
+        else:
+            diagnosis = "catalog_unavailable_chat_request_rejected"
         return {
             "ok": False,
             "result": "provider_error" if exc.status else "client_error",
+            "diagnosis": diagnosis,
             "provider_status": exc.status,
             "provider_error_code": exc.provider_code,
+            "catalog_status": catalog.status,
+            "catalog_error_code": catalog.error_code,
+            "requested_model_listed": (
+                settings.agent_model in catalog.model_ids if catalog.status == 200 else None
+            ),
+            "available_relevant_models": [
+                model_id for model_id in catalog.model_ids
+                if "muse" in model_id.lower() or "sam" in model_id.lower()
+            ],
             **details,
         }
 
     return {
         "ok": bool(response.content and response.content.strip()),
         "result": "reply_received" if response.content and response.content.strip() else "empty_reply",
+        "diagnosis": "model_call_succeeded",
         "provider_status": 200,
+        "catalog_status": catalog.status,
+        "catalog_error_code": catalog.error_code,
+        "requested_model_listed": (
+            settings.agent_model in catalog.model_ids if catalog.status == 200 else None
+        ),
+        "available_relevant_models": [
+            model_id for model_id in catalog.model_ids
+            if "muse" in model_id.lower() or "sam" in model_id.lower()
+        ],
         **details,
     }
 

@@ -163,6 +163,35 @@ def test_provider_error_code_is_available_without_echoing_api_key(monkeypatch):
     assert "private-test-key" not in error.value.detail
 
 
+def test_list_models_uses_configured_auth_and_returns_only_model_ids(monkeypatch):
+    real_client = mc.httpx.Client
+    requested = []
+    transport = mc.httpx.MockTransport(
+        lambda request: (
+            requested.append(request)
+            or mc.httpx.Response(
+                200,
+                json={"data": [{"id": "muse-spark-1.3"}, {"id": "sam-3.1"}, {"object": "model"}]},
+            )
+        )
+    )
+    monkeypatch.setattr(
+        mc.httpx,
+        "Client",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
+    settings = get_settings()
+    monkeypatch.setattr(settings, "meta_base_url", "https://api.meta.ai/v1")
+    monkeypatch.setattr(settings, "meta_api_key", "private-test-key")
+
+    catalog = HttpMetaClient(settings).list_models()
+
+    assert catalog.status == 200
+    assert catalog.model_ids == ("muse-spark-1.3", "sam-3.1")
+    assert requested[0].url.path == "/v1/models"
+    assert requested[0].headers["authorization"] == "Bearer private-test-key"
+
+
 # ---- the whole agent over real HTTP --------------------------------------------------------------
 
 @pytest.mark.parametrize("fmt", ["png", "rle_str"])
